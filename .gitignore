@@ -1,0 +1,9 @@
+node_modules
+dist
+*.tsbuildinfo
+.vite
+coverage
+test-results
+playwright-report
+*.log
+.devin/config.local.json

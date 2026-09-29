@@ -1,0 +1,133 @@
+import type { MindMapDoc, NodeId, Side } from './types';
+
+export interface NodeBox {
+  id: NodeId;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  depth: number;
+  side: Side | null;
+  /** Index of the main topic (root child) this node belongs to; -1 for root. */
+  branch: number;
+}
+
+export type TextMeasurer = (text: string, font: string) => number;
+
+interface LevelStyle {
+  font: string;
+  lineHeight: number;
+  padX: number;
+  padY: number;
+  maxTextWidth: number;
+  minWidth: number;
+  /** Extra width taken by the checkbox. */
+  extra: number;
+}
+
+export const FONT_FAMILY = `system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif`;
+
+export const levelStyle = (depth: number): LevelStyle =>
+  depth === 0
+    ? { font: `700 20px ${FONT_FAMILY}`, lineHeight: 28, padX: 24, padY: 14, maxTextWidth: 280, minWidth: 120, extra: 0 }
+    : depth === 1
+      ? { font: `700 15px ${FONT_FAMILY}`, lineHeight: 22, padX: 14, padY: 9, maxTextWidth: 240, minWidth: 80, extra: 22 }
+      : { font: `400 13px ${FONT_FAMILY}`, lineHeight: 19, padX: 10, padY: 5, maxTextWidth: 240, minWidth: 60, extra: 20 };
+
+const H_GAP_ROOT = 64;
+const H_GAP = 36;
+const V_GAP_MAIN = 24;
+const V_GAP = 8;
+
+let canvasCtx: CanvasRenderingContext2D | null | undefined;
+
+/** Uses a canvas to measure text in the browser; falls back to a char-count estimate elsewhere. */
+export const defaultMeasurer: TextMeasurer = (text, font) => {
+  if (canvasCtx === undefined) {
+    canvasCtx = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null;
+  }
+  if (canvasCtx) {
+    canvasCtx.font = font;
+    return canvasCtx.measureText(text).width;
+  }
+  const size = Number(/(\d+)px/.exec(font)?.[1] ?? 14);
+  return [...text].reduce((w, ch) => w + (ch.charCodeAt(0) > 0xff ? size : size * 0.6), 0);
+};
+
+export function measureNode(text: string, depth: number, measure: TextMeasurer): { width: number; height: number } {
+  const s = levelStyle(depth);
+  const lines = (text || ' ').split('\n');
+  let textWidth = 0;
+  let lineCount = 0;
+  for (const line of lines) {
+    const w = measure(line || ' ', s.font);
+    textWidth = Math.max(textWidth, Math.min(w, s.maxTextWidth));
+    lineCount += Math.max(1, Math.ceil(w / s.maxTextWidth));
+  }
+  return {
+    width: Math.ceil(Math.max(s.minWidth, textWidth + s.padX * 2 + s.extra)) + 2,
+    height: Math.ceil(lineCount * s.lineHeight + s.padY * 2) + 2,
+  };
+}
+
+export function layoutMap(doc: MindMapDoc, measure: TextMeasurer = defaultMeasurer): Map<NodeId, NodeBox> {
+  const boxes = new Map<NodeId, NodeBox>();
+  const sizes = new Map<NodeId, { width: number; height: number }>();
+  const subtree = new Map<NodeId, number>();
+
+  const visibleChildren = (id: NodeId) => (doc.nodes[id].collapsed ? [] : doc.nodes[id].children);
+  const gapFor = (depth: number) => (depth === 1 ? V_GAP_MAIN : V_GAP);
+
+  const sizeOf = (id: NodeId, depth: number) => {
+    let s = sizes.get(id);
+    if (!s) sizes.set(id, (s = measureNode(doc.nodes[id].text, depth, measure)));
+    return s;
+  };
+
+  const stackHeight = (ids: NodeId[], depth: number) =>
+    ids.reduce((sum, c) => sum + subtreeHeight(c, depth), 0) + Math.max(0, ids.length - 1) * gapFor(depth);
+
+  function subtreeHeight(id: NodeId, depth: number): number {
+    const cached = subtree.get(id);
+    if (cached !== undefined) return cached;
+    const h = Math.max(sizeOf(id, depth).height, stackHeight(visibleChildren(id), depth + 1));
+    subtree.set(id, h);
+    return h;
+  }
+
+  function place(id: NodeId, anchorX: number, top: number, side: Side, depth: number, branch: number) {
+    const { width, height } = sizeOf(id, depth);
+    const centerY = top + subtreeHeight(id, depth) / 2;
+    const gap = depth === 1 ? H_GAP_ROOT : H_GAP;
+    const x = side === 'right' ? anchorX + gap : anchorX - gap - width;
+    boxes.set(id, { id, x, y: centerY - height / 2, width, height, depth, side, branch });
+    placeStack(visibleChildren(id), side === 'right' ? x + width : x, centerY, side, depth + 1, branch);
+  }
+
+  function placeStack(ids: NodeId[], anchorX: number, centerY: number, side: Side, depth: number, branch: number) {
+    let top = centerY - stackHeight(ids, depth) / 2;
+    for (const c of ids) {
+      place(c, anchorX, top, side, depth, branch < 0 ? root.children.indexOf(c) : branch);
+      top += subtreeHeight(c, depth) + gapFor(depth);
+    }
+  }
+
+  const root = doc.nodes[doc.rootId];
+  const rootSize = sizeOf(root.id, 0);
+  boxes.set(root.id, {
+    id: root.id,
+    x: -rootSize.width / 2,
+    y: -rootSize.height / 2,
+    ...rootSize,
+    depth: 0,
+    side: null,
+    branch: -1,
+  });
+  if (!root.collapsed) {
+    const right = root.children.filter((c) => doc.nodes[c].side !== 'left');
+    const left = root.children.filter((c) => doc.nodes[c].side === 'left');
+    placeStack(right, rootSize.width / 2, 0, 'right', 1, -1);
+    placeStack(left, -rootSize.width / 2, 0, 'left', 1, -1);
+  }
+  return boxes;
+}
