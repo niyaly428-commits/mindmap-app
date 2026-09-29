@@ -57,6 +57,31 @@ describe('editorStore', () => {
     expect(s().doc!.nodes[root]).toBeDefined();
   });
 
+  it('title changes update the root text and are undoable in one step', () => {
+    s().setTitleDraft('入力中');
+    expect(s().past).toHaveLength(0);
+    s().setTitle('新タイトル');
+    expect(s().titleDraft).toBeNull();
+    expect(s().doc!.nodes[s().doc!.rootId].text).toBe('新タイトル');
+    s().setText(s().doc!.rootId, '中央');
+    expect(s().doc!.title).toBe('中央');
+    s().undo();
+    s().undo();
+    expect(s().doc!.title).toBe('t');
+    expect(s().doc!.nodes[s().doc!.rootId].text).toBe('t');
+  });
+
+  it('status / memo / link changes are undoable', () => {
+    s().addChild();
+    const id = s().selectedId!;
+    s().setAttributes(id, { status: 'waiting', note: 'n' });
+    expect(s().doc!.nodes[id]).toMatchObject({ status: 'waiting', note: 'n' });
+    s().undo();
+    expect(s().doc!.nodes[id].status).toBeUndefined();
+    s().redo();
+    expect(s().doc!.nodes[id].note).toBe('n');
+  });
+
   it('toggles checked on the selected node', () => {
     s().addChild();
     const id = s().selectedId!;

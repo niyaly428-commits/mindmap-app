@@ -14,6 +14,14 @@ export interface NodeBox {
 
 export type TextMeasurer = (text: string, font: string) => number;
 
+export interface Size {
+  width: number;
+  height: number;
+}
+
+/** Width of one small icon (status / memo / link) including its gap. */
+export const ICON_WIDTH = 20;
+
 interface LevelStyle {
   font: string;
   lineHeight: number;
@@ -54,7 +62,14 @@ export const defaultMeasurer: TextMeasurer = (text, font) => {
   return [...text].reduce((w, ch) => w + (ch.charCodeAt(0) > 0xff ? size : size * 0.6), 0);
 };
 
-export function measureNode(text: string, depth: number, measure: TextMeasurer): { width: number; height: number } {
+/** Max rendered width of a topic box at this depth (text wraps beyond it). Used by the CSS too. */
+export const maxNodeWidth = (depth: number, icons = 0): number => {
+  const s = levelStyle(depth);
+  return s.maxTextWidth + s.padX * 2 + s.extra + icons * ICON_WIDTH + 2;
+};
+
+/** Estimated size, used until the rendered node has been measured. */
+export function measureNode(text: string, depth: number, measure: TextMeasurer, icons = 0): Size {
   const s = levelStyle(depth);
   const lines = (text || ' ').split('\n');
   let textWidth = 0;
@@ -65,14 +80,26 @@ export function measureNode(text: string, depth: number, measure: TextMeasurer):
     lineCount += Math.max(1, Math.ceil(w / s.maxTextWidth));
   }
   return {
-    width: Math.ceil(Math.max(s.minWidth, textWidth + s.padX * 2 + s.extra)) + 2,
+    width: Math.ceil(Math.max(s.minWidth, textWidth + s.padX * 2 + s.extra + icons * ICON_WIDTH)) + 2,
     height: Math.ceil(lineCount * s.lineHeight + s.padY * 2) + 2,
   };
 }
 
-export function layoutMap(doc: MindMapDoc, measure: TextMeasurer = defaultMeasurer): Map<NodeId, NodeBox> {
+export const iconCount = (node: MindMapDoc['nodes'][string]): number =>
+  (node.status ? 1 : 0) + (node.note ? 1 : 0) + (node.link ? 1 : 0);
+
+/**
+ * Two-sided mind map layout. Every subtree gets its own vertical band sized from the real
+ * (measured) node sizes, so topics never overlap regardless of text length.
+ * `measured` holds rendered DOM sizes; nodes not measured yet use an estimate.
+ */
+export function layoutMap(
+  doc: MindMapDoc,
+  measure: TextMeasurer = defaultMeasurer,
+  measured?: ReadonlyMap<NodeId, Size>,
+): Map<NodeId, NodeBox> {
   const boxes = new Map<NodeId, NodeBox>();
-  const sizes = new Map<NodeId, { width: number; height: number }>();
+  const sizes = new Map<NodeId, Size>();
   const subtree = new Map<NodeId, number>();
 
   const visibleChildren = (id: NodeId) => (doc.nodes[id].collapsed ? [] : doc.nodes[id].children);
@@ -80,7 +107,11 @@ export function layoutMap(doc: MindMapDoc, measure: TextMeasurer = defaultMeasur
 
   const sizeOf = (id: NodeId, depth: number) => {
     let s = sizes.get(id);
-    if (!s) sizes.set(id, (s = measureNode(doc.nodes[id].text, depth, measure)));
+    if (!s) {
+      const node = doc.nodes[id];
+      s = measured?.get(id) ?? measureNode(node.text, depth, measure, iconCount(node));
+      sizes.set(id, s);
+    }
     return s;
   };
 

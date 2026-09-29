@@ -13,15 +13,20 @@ import {
 } from '@xyflow/react';
 import { useEditorStore } from '../../store/editorStore';
 import { descendantIds } from '../../model/tree';
-import { layoutMap, type NodeBox } from '../../model/layout';
+import { defaultMeasurer, iconCount, layoutMap, maxNodeWidth, type NodeBox, type Size } from '../../model/layout';
 import type { MindMapDoc, NodeId } from '../../model/types';
 import { TopicNode, type TopicNodeType } from './TopicNode';
 import { useDragStore } from './dragStore';
+import { openPopover } from './popoverStore';
 import { branchColor } from './theme';
 
 const nodeTypes = { topic: TopicNode };
 
-function toFlow(doc: MindMapDoc, boxes: Map<NodeId, NodeBox>): { nodes: TopicNodeType[]; edges: Edge[] } {
+function toFlow(
+  doc: MindMapDoc,
+  boxes: Map<NodeId, NodeBox>,
+  sizes: ReadonlyMap<NodeId, Size>,
+): { nodes: TopicNodeType[]; edges: Edge[] } {
   const nodes: TopicNodeType[] = [];
   const edges: Edge[] = [];
   for (const box of boxes.values()) {
@@ -32,7 +37,18 @@ function toFlow(doc: MindMapDoc, boxes: Map<NodeId, NodeBox>): { nodes: TopicNod
       type: 'topic',
       position: { x: box.x, y: box.y },
       draggable: box.depth > 0,
-      data: { text: node.text, checked: node.checked, depth: box.depth, color, width: box.width },
+      // Keep known sizes so React Flow doesn't hide & re-measure every node after each edit.
+      measured: sizes.get(box.id),
+      data: {
+        text: node.text,
+        checked: node.checked,
+        depth: box.depth,
+        color,
+        maxWidth: maxNodeWidth(box.depth, iconCount(node)),
+        status: node.status,
+        hasNote: !!node.note,
+        link: node.link,
+      },
     });
     if (node.parentId) {
       const right = box.side === 'right';
@@ -66,17 +82,29 @@ function hitTest(boxes: Map<NodeId, NodeBox>, p: XYPosition, exclude: Set<NodeId
 
 export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
   const { screenToFlowPosition } = useReactFlow();
-  const boxes = useMemo(() => layoutMap(doc), [doc]);
-  const flow = useMemo(() => toFlow(doc, boxes), [doc, boxes]);
+  // Real rendered sizes reported by React Flow; the layout uses them so topics never overlap.
+  const [sizes, setSizes] = useState<ReadonlyMap<NodeId, Size>>(() => new Map());
+  const boxes = useMemo(() => layoutMap(doc, defaultMeasurer, sizes), [doc, sizes]);
+  const flow = useMemo(() => toFlow(doc, boxes, sizes), [doc, boxes, sizes]);
   const [nodes, setNodes] = useState(flow.nodes);
   const drag = useRef<{ ids: Set<NodeId> } | null>(null);
 
   useEffect(() => setNodes(flow.nodes), [flow.nodes]);
 
-  const onNodesChange: OnNodesChange<TopicNodeType> = useCallback(
-    (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
-    [],
-  );
+  const onNodesChange: OnNodesChange<TopicNodeType> = useCallback((changes) => {
+    setNodes((nds) => applyNodeChanges(changes, nds));
+    setSizes((prev) => {
+      let next: Map<NodeId, Size> | null = null;
+      for (const c of changes) {
+        if (c.type !== 'dimensions' || !c.dimensions) continue;
+        const old = prev.get(c.id);
+        const { width, height } = c.dimensions;
+        if (old && Math.abs(old.width - width) < 0.5 && Math.abs(old.height - height) < 0.5) continue;
+        (next ??= new Map(prev)).set(c.id, { width, height });
+      }
+      return next ?? prev;
+    });
+  }, []);
 
   const onNodeDragStart: OnNodeDrag<TopicNodeType> = useCallback(
     (_, node) => {
@@ -132,6 +160,11 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       nodeTypes={nodeTypes}
       onNodesChange={onNodesChange}
       onNodeClick={(_, n) => useEditorStore.getState().select(n.id)}
+      onNodeContextMenu={(e, n) => {
+        e.preventDefault();
+        useEditorStore.getState().select(n.id);
+        openPopover({ kind: 'menu', nodeId: n.id, x: e.clientX, y: e.clientY });
+      }}
       onPaneClick={() => useEditorStore.getState().select(null)}
       onNodeDragStart={onNodeDragStart}
       onNodeDrag={onNodeDrag}

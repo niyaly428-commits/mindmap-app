@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { sideOf } from '../../model/tree';
 import type { MindMapDoc, NodeId } from '../../model/types';
+import { closePopover, usePopoverStore } from './popoverStore';
 
 const isTextInput = (el: EventTarget | null) =>
   el instanceof HTMLElement &&
@@ -34,6 +35,11 @@ export function useKeyboardShortcuts() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.isComposing || isTextInput(e.target)) return;
+      // While a menu / memo / link popup is open, keys belong to it (Escape closes it).
+      if (usePopoverStore.getState().popover) {
+        if (e.key === 'Escape') closePopover();
+        return;
+      }
       const s = useEditorStore.getState();
       if (!s.doc) return;
       const mod = e.ctrlKey || e.metaKey;

@@ -46,6 +46,31 @@ describe('layoutMap', () => {
       for (let j = i + 1; j < boxes.length; j++) expect(overlaps(boxes[i], boxes[j])).toBe(false);
   });
 
+  it('uses measured sizes so long (e.g. URL) topics never overlap', () => {
+    let doc = createMap();
+    const main = addChild(doc, doc.rootId, 'main');
+    doc = main.doc;
+    const ids: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const r = addChild(doc, main.id, `https://example.com/${'x'.repeat(40 * i)}`);
+      doc = r.doc;
+      ids.push(r.id);
+      for (let j = 0; j < 2; j++) doc = addChild(doc, r.id, `leaf ${i}-${j}`).doc;
+    }
+    // Simulate rendered sizes: wrapped URLs become tall, some nodes wide.
+    const measured = new Map(ids.map((id, i) => [id, { width: 260, height: 30 + i * 60 }]));
+    const boxes = [...layoutMap(doc, measure, measured).values()];
+    for (const id of ids) expect(boxes.find((b) => b.id === id)).toMatchObject(measured.get(id)!);
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++) expect(overlaps(boxes[i], boxes[j])).toBe(false);
+    // Children sit to the right of their (wide) parent.
+    for (const b of boxes) {
+      const p = doc.nodes[b.id].parentId;
+      const pb = boxes.find((x) => x.id === p);
+      if (pb) expect(b.x).toBeGreaterThanOrEqual(pb.x + pb.width);
+    }
+  });
+
   it('hides children of collapsed nodes', () => {
     let doc = createMap();
     const main = addChild(doc, doc.rootId, 'main');

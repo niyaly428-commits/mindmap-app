@@ -1,19 +1,20 @@
 import type { MindMapDoc, MindNode, NodeId, Side } from './types';
 
-export const DEFAULT_ROOT_TEXT = '中心トピック';
+export const DEFAULT_MAP_TITLE = '無題のマインドマップ';
 export const DEFAULT_TOPIC_TEXT = '新しいトピック';
 
 export const createId = (): string =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
-export function createMap(title = '無題のマインドマップ', now = Date.now()): MindMapDoc {
+/** The map title and the root topic text are always the same. */
+export function createMap(title = DEFAULT_MAP_TITLE, now = Date.now()): MindMapDoc {
   const rootId = createId();
   return {
     id: createId(),
     schemaVersion: 1,
     title,
     rootId,
-    nodes: { [rootId]: { id: rootId, text: DEFAULT_ROOT_TEXT, parentId: null, children: [], checked: false } },
+    nodes: { [rootId]: { id: rootId, text: title, parentId: null, children: [], checked: false } },
     createdAt: now,
     updatedAt: now,
   };
@@ -117,9 +118,38 @@ export function removeNode(doc: MindMapDoc, id: NodeId): MindMapDoc {
 }
 
 export function setText(doc: MindMapDoc, id: NodeId, text: string): MindMapDoc {
+  if (id === doc.rootId) return setTitle(doc, text);
   const node = doc.nodes[id];
   if (!node || node.text === text) return doc;
   return withNodes(doc, { ...doc.nodes, [id]: { ...node, text } });
+}
+
+/** Sets the map title and the root topic text together. */
+export function setTitle(doc: MindMapDoc, title: string): MindMapDoc {
+  const root = doc.nodes[doc.rootId];
+  if (doc.title === title && root.text === title) return doc;
+  return { ...doc, title, nodes: { ...doc.nodes, [root.id]: { ...root, text: title } } };
+}
+
+/** Older maps stored the title and root text separately; the title wins. */
+export const syncRootWithTitle = (doc: MindMapDoc): MindMapDoc => setTitle(doc, doc.title);
+
+type NodeAttributes = Pick<MindNode, 'status' | 'note' | 'link'>;
+
+/** Sets optional attributes; `undefined` or empty strings remove the attribute. */
+export function setAttributes(doc: MindMapDoc, id: NodeId, attrs: Partial<NodeAttributes>): MindMapDoc {
+  const node = doc.nodes[id];
+  if (!node) return doc;
+  const next: MindNode = { ...node };
+  let changed = false;
+  for (const key of Object.keys(attrs) as (keyof NodeAttributes)[]) {
+    const value = attrs[key] || undefined;
+    if (next[key] === value) continue;
+    changed = true;
+    if (value === undefined) delete next[key];
+    else Object.assign(next, { [key]: value });
+  }
+  return changed ? withNodes(doc, { ...doc.nodes, [id]: next }) : doc;
 }
 
 export function setChecked(doc: MindMapDoc, id: NodeId, checked: boolean): MindMapDoc {

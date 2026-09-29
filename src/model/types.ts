@@ -2,6 +2,8 @@ export type NodeId = string;
 
 export type Side = 'left' | 'right';
 
+export type TaskStatus = 'todo' | 'doing' | 'waiting';
+
 /**
  * A single topic in the mind map.
  * Optional fields are reserved for future features (memo, due date, priority, tags, images, folding)
@@ -16,7 +18,11 @@ export interface MindNode {
   /** Only meaningful for direct children of the root. */
   side?: Side;
   collapsed?: boolean;
+  status?: TaskStatus;
+  /** Free text; may contain URLs (rendered as links). */
   note?: string;
+  /** Normalized http(s) URL. */
+  link?: string;
   dueDate?: string;
   priority?: 1 | 2 | 3;
   tags?: string[];

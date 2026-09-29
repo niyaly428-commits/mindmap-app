@@ -1,0 +1,84 @@
+import { describe, expect, it } from 'vitest';
+import { createNextDayMap, nextDayTitle } from './nextDay';
+import { addChild, createMap, setAttributes, toggleChecked } from './tree';
+import type { MindMapDoc } from './types';
+
+const sep29 = new Date(2026, 8, 29);
+
+describe('nextDayTitle', () => {
+  it.each([
+    ['タスク_9月29日', 'タスク_9月30日'],
+    ['タスク_9月30日', 'タスク_10月1日'],
+    ['09月09日のタスク', '09月10日のタスク'],
+    ['2026年12月31日', '2027年1月1日'],
+    ['2026/09/29 作業', '2026/09/30 作業'],
+    ['2026-02-28', '2026-03-01'],
+    ['日報 9/29', '日報 9/30'],
+  ])('%s -> %s', (input, expected) => {
+    expect(nextDayTitle(input, sep29)).toBe(expected);
+  });
+
+  it('uses the year of the source map for M月D日 (leap years)', () => {
+    expect(nextDayTitle('2月28日', new Date(2028, 0, 1))).toBe('2月29日');
+    expect(nextDayTitle('2月28日', new Date(2027, 0, 1))).toBe('3月1日');
+  });
+
+  it('falls back to タスク_M月D日 of the day after the source date', () => {
+    expect(nextDayTitle('旅行計画', sep29)).toBe('タスク_9月30日');
+    expect(nextDayTitle('13月40日', sep29)).toBe('タスク_9月30日');
+  });
+});
+
+describe('createNextDayMap', () => {
+  /**
+   * 外注 □ (A ☑, B □, C ☑) — unfinished, carried over as a whole
+   * 完了 ☑ (D ☑)            — finished, dropped
+   */
+  function source(): MindMapDoc {
+    let doc = createMap('タスク_9月29日', sep29.getTime());
+    const add = (parent: string, text: string) => {
+      const r = addChild(doc, parent, text);
+      doc = r.doc;
+      return r.id;
+    };
+    const gaichu = add(doc.rootId, '外注');
+    const a = add(gaichu, 'A');
+    add(gaichu, 'B');
+    const c = add(gaichu, 'C');
+    const done = add(doc.rootId, '完了');
+    add(done, 'D');
+    doc = toggleChecked(toggleChecked(doc, a), c);
+    doc = toggleChecked(doc, done);
+    doc = setAttributes(doc, gaichu, { status: 'waiting', note: 'メモ https://example.com', link: 'https://example.com' });
+    return doc;
+  }
+
+  it('carries over unfinished main topics with their whole subtree and states', () => {
+    const src = source();
+    const next = createNextDayMap(src);
+    const root = next.nodes[next.rootId];
+    expect(next.title).toBe('タスク_9月30日');
+    expect(root.text).toBe('タスク_9月30日');
+    expect(root.children).toHaveLength(1);
+
+    const gaichu = next.nodes[root.children[0]];
+    expect(gaichu).toMatchObject({ text: '外注', checked: false, status: 'waiting', link: 'https://example.com' });
+    expect(gaichu.note).toContain('メモ');
+    expect(gaichu.children.map((id) => [next.nodes[id].text, next.nodes[id].checked])).toEqual([
+      ['A', true],
+      ['B', false],
+      ['C', true],
+    ]);
+    for (const id of gaichu.children) expect(next.nodes[id].parentId).toBe(gaichu.id);
+    expect(Object.keys(next.nodes)).toHaveLength(5);
+  });
+
+  it('does not modify the source and uses new ids', () => {
+    const src = source();
+    const snapshot = structuredClone(src);
+    const next = createNextDayMap(src);
+    expect(src).toEqual(snapshot);
+    expect(next.id).not.toBe(src.id);
+    for (const id of Object.keys(next.nodes)) expect(src.nodes[id]).toBeUndefined();
+  });
+});

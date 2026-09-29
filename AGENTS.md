@@ -15,5 +15,8 @@ Personal XMind-like mind map + task app. Browser-only (no server/login). This pr
 - `src/model/` — pure document logic: `types.ts` (MindMapDoc/MindNode, reserved optional fields for future features), `tree.ts` (immutable ops + checkbox propagation), `layout.ts` (left/right mind-map auto layout).
 - `src/store/editorStore.ts` — document + selection + snapshot Undo/Redo. `autosave.ts` saves 300ms after edits.
 - `src/db/` — Dexie DB (`maps` table, version 1). Add future tables (e.g. `assets` for image Blobs) with `this.version(2)`.
-- `src/features/list` (map list), `src/features/editor` (canvas, TopicNode, keyboard shortcuts).
+- `src/model/nextDay.ts` — "次の日のタスクを作成": next-day title + carry over unchecked main topics (whole subtree).
+- Map title and root topic text are always identical (`tree.setTitle` / `setText(root)`); `titleDraft` in the store mirrors typing live.
+- Layout uses real rendered sizes (React Flow `dimensions` changes → `layoutMap(..., measured)`), so long text/URLs never overlap.
+- `src/features/list` (map list), `src/features/editor` (canvas, TopicNode, keyboard shortcuts, `Popovers.tsx` = context menu / memo / link).
 - Hash routing: `#/` list, `#/maps/:id` editor.

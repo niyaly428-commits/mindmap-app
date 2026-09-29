@@ -6,8 +6,11 @@ import {
   createMap,
   moveNode,
   removeNode,
+  setAttributes,
   setSide,
   setText,
+  setTitle,
+  syncRootWithTitle,
   toggleChecked,
 } from './tree';
 import type { MindMapDoc } from './types';
@@ -37,10 +40,32 @@ function sample() {
 const checked = (doc: MindMapDoc, id: string) => doc.nodes[id].checked;
 
 describe('tree operations', () => {
-  it('creates a map with a root', () => {
+  it('creates a map with a root named after the title', () => {
     const doc = createMap('x');
     expect(doc.title).toBe('x');
     expect(doc.nodes[doc.rootId].parentId).toBeNull();
+    expect(doc.nodes[doc.rootId].text).toBe('x');
+  });
+
+  it('keeps the map title and root text in sync both ways', () => {
+    const { doc, root, a } = sample();
+    const byTitle = setTitle(doc, 'タイトル');
+    expect(byTitle.nodes[root].text).toBe('タイトル');
+    const byRoot = setText(doc, root, '中央');
+    expect(byRoot.title).toBe('中央');
+    expect(setText(doc, a, 'z').title).toBe(doc.title);
+    const legacy = { ...doc, nodes: { ...doc.nodes, [root]: { ...doc.nodes[root], text: 'old' } } };
+    expect(syncRootWithTitle(legacy).nodes[root].text).toBe(doc.title);
+    expect(syncRootWithTitle(doc)).toBe(doc);
+  });
+
+  it('sets and clears optional attributes (status / note / link)', () => {
+    const { doc, a } = sample();
+    const next = setAttributes(doc, a, { status: 'doing', note: 'memo', link: 'https://x.dev' });
+    expect(next.nodes[a]).toMatchObject({ status: 'doing', note: 'memo', link: 'https://x.dev' });
+    expect(setAttributes(next, a, { status: 'doing' })).toBe(next);
+    const cleared = setAttributes(next, a, { status: undefined, note: '', link: undefined });
+    expect('status' in cleared.nodes[a] || 'note' in cleared.nodes[a] || 'link' in cleared.nodes[a]).toBe(false);
   });
 
   it('adds children and balances main topics left/right', () => {

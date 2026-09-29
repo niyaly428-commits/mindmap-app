@@ -26,10 +26,27 @@ describe('mapRepository (IndexedDB)', () => {
     expect((await r.list())[0].id).toBe(m1.id);
 
     await r.rename(m2.id, 'renamed');
-    expect((await r.get(m2.id))!.title).toBe('renamed');
+    const renamed = (await r.get(m2.id))!;
+    expect(renamed.title).toBe('renamed');
+    expect(renamed.nodes[renamed.rootId].text).toBe('renamed');
 
     await r.remove(m1.id);
     expect(await r.get(m1.id)).toBeUndefined();
     expect(await r.list()).toHaveLength(1);
+  });
+
+  it('creates the next day map as a new record and keeps the source unchanged', async () => {
+    db = new MindMapDB(`test-${Math.random()}`);
+    const r = repo();
+    const src = await r.create('タスク_9月29日');
+    await r.save(addChild(src, src.rootId, '外注').doc);
+    const before = await db.maps.get(src.id);
+
+    const next = (await r.createNextDay(src.id))!;
+    expect(next.title).toBe('タスク_9月30日');
+    expect(await db.maps.get(src.id)).toEqual(before);
+    const stored = (await r.get(next.id))!;
+    expect(stored.nodes[stored.rootId].children.map((id) => stored.nodes[id].text)).toEqual(['外注']);
+    expect(await r.list()).toHaveLength(2);
   });
 });

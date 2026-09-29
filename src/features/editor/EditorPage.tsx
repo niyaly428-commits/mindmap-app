@@ -5,6 +5,8 @@ import { navigate } from '../../lib/router';
 import { useEditorStore } from '../../store/editorStore';
 import { useAutosave } from '../../store/autosave';
 import { MindMapCanvas } from './MindMapCanvas';
+import { Popovers } from './Popovers';
+import { closePopover } from './popoverStore';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 
 export function EditorPage({ mapId }: { mapId: string }) {
@@ -13,6 +15,7 @@ export function EditorPage({ mapId }: { mapId: string }) {
 
   useEffect(() => {
     let alive = true;
+    closePopover();
     mapRepository.get(mapId).then((d) => {
       if (!alive) return;
       useEditorStore.getState().load(d ?? null);
@@ -48,6 +51,7 @@ export function EditorPage({ mapId }: { mapId: string }) {
         )}
       </div>
       <ShortcutHelp />
+      <Popovers />
     </div>
   );
 }
@@ -57,15 +61,16 @@ function Toolbar() {
   const canUndo = useEditorStore((s) => s.past.length > 0);
   const canRedo = useEditorStore((s) => s.future.length > 0);
   const selectedId = useEditorStore((s) => s.selectedId);
-  const { undo, redo, addChild, addSibling, deleteNode, setTitle } = useEditorStore.getState();
-  const [title, setLocalTitle] = useState(doc?.title ?? '');
+  const titleDraft = useEditorStore((s) => s.titleDraft);
+  const { undo, redo, addChild, addSibling, deleteNode, setTitle, setTitleDraft } = useEditorStore.getState();
 
-  useEffect(() => setLocalTitle(doc?.title ?? ''), [doc?.title]);
-
+  // The title is shared with the root topic: typing here shows up there immediately (and vice versa).
   const commitTitle = () => {
-    const t = title.trim();
+    const draft = useEditorStore.getState().titleDraft;
+    if (draft === null) return;
+    const t = draft.trim();
     if (t) setTitle(t);
-    else setLocalTitle(doc?.title ?? '');
+    else setTitleDraft(null);
   };
 
   const isRoot = selectedId === doc?.rootId;
@@ -79,12 +84,17 @@ function Toolbar() {
       </button>
       <input
         className="toolbar-title"
-        value={title}
+        value={titleDraft ?? doc?.title ?? ''}
         aria-label="マップのタイトル"
-        onChange={(e) => setLocalTitle(e.target.value)}
+        onChange={(e) => setTitleDraft(e.target.value)}
         onBlur={commitTitle}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.currentTarget.blur();
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            setTitleDraft(null);
+            e.currentTarget.blur();
+          }
         }}
       />
       <div className="toolbar-group">
@@ -115,7 +125,8 @@ function ShortcutHelp() {
   return (
     <div className="shortcut-help">
       <b>Tab</b> 子を追加 <b>Enter</b> 兄弟を追加 <b>F2</b>/ダブルクリック 編集 <b>Space</b> チェック <b>Delete</b> 削除{' '}
-      <b>矢印</b> 移動 <b>Ctrl+Z</b>/<b>Ctrl+Y</b> 元に戻す/やり直す ・ ドラッグで他のトピックへ付け替え
+      <b>矢印</b> 移動 <b>Ctrl+Z</b>/<b>Ctrl+Y</b> 元に戻す/やり直す <b>右クリック</b> メモ・リンク・ステータス ・
+      ドラッグで他のトピックへ付け替え
     </div>
   );
 }

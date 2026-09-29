@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as tree from '../model/tree';
-import type { MindMapDoc, NodeId, Side } from '../model/types';
+import type { MindMapDoc, MindNode, NodeId, Side } from '../model/types';
 
 const HISTORY_LIMIT = 200;
 
@@ -8,6 +8,8 @@ interface EditorState {
   doc: MindMapDoc | null;
   selectedId: NodeId | null;
   editingId: NodeId | null;
+  /** Uncommitted title while typing in the toolbar or the root topic; shown live in both places. */
+  titleDraft: string | null;
   past: MindMapDoc[];
   future: MindMapDoc[];
 
@@ -24,6 +26,8 @@ interface EditorState {
   moveNode: (id: NodeId, newParentId: NodeId, side?: Side) => void;
   setSide: (id: NodeId, side: Side) => void;
   setTitle: (title: string) => void;
+  setTitleDraft: (draft: string | null) => void;
+  setAttributes: (id: NodeId, attrs: Partial<Pick<MindNode, 'status' | 'note' | 'link'>>) => void;
 
   undo: () => void;
   redo: () => void;
@@ -51,6 +55,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       past,
       future,
       editingId: null,
+      titleDraft: null,
       selectedId: selectedId && doc.nodes[selectedId] ? selectedId : doc.rootId,
     });
   };
@@ -59,10 +64,12 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     doc: null,
     selectedId: null,
     editingId: null,
+    titleDraft: null,
     past: [],
     future: [],
 
-    load: (doc) => set({ doc, selectedId: doc?.rootId ?? null, editingId: null, past: [], future: [] }),
+    load: (doc) =>
+      set({ doc, selectedId: doc?.rootId ?? null, editingId: null, titleDraft: null, past: [], future: [] }),
     select: (selectedId) => set({ selectedId, editingId: null }),
     startEditing: (id) => {
       const t = target(id);
@@ -113,7 +120,12 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     },
     setTitle: (title) => {
       const { doc } = get();
-      if (doc && doc.title !== title) commit({ ...doc, title });
+      if (doc) commit(tree.setTitle(doc, title), { titleDraft: null });
+    },
+    setTitleDraft: (titleDraft) => set({ titleDraft }),
+    setAttributes: (id, attrs) => {
+      const { doc } = get();
+      if (doc) commit(tree.setAttributes(doc, id, attrs));
     },
 
     undo: () => {

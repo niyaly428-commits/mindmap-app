@@ -51,6 +51,11 @@ function MapCard({ map, onChanged }: { map: MindMapSummary; onChanged: () => voi
     } else setTitle(map.title);
   };
 
+  const createNextDay = async () => {
+    await mapRepository.createNextDay(map.id);
+    onChanged();
+  };
+
   const remove = async () => {
     if (!window.confirm(`「${map.title}」を削除しますか？この操作は元に戻せません。`)) return;
     await mapRepository.remove(map.id);
@@ -84,6 +89,9 @@ function MapCard({ map, onChanged }: { map: MindMapSummary; onChanged: () => voi
           更新 {formatDate(map.updatedAt)}
         </span>
         <span className="card-actions">
+          <button className="btn-link" onClick={createNextDay} title="未完了の親タスクを引き継いだ翌日のマップを作成">
+            次の日のタスクを作成
+          </button>
           <button className="btn-link" onClick={() => setEditing(true)}>
             名前変更
           </button>

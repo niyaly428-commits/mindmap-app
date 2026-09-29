@@ -14,7 +14,7 @@ test('create, edit, check, undo, persist, rename and delete a map', async ({ pag
   await page.goto('/');
   await page.getByRole('button', { name: '＋ 新規作成' }).click();
   await expect(page).toHaveURL(/#\/maps\//);
-  await expect(topic(page, '中心トピック')).toBeVisible();
+  await expect(page.locator('.topic-root')).toBeVisible();
 
   // Root is selected: Tab adds a main topic, then sub topics.
   await page.keyboard.press('Tab');
@@ -81,12 +81,12 @@ test('create, edit, check, undo, persist, rename and delete a map', async ({ pag
 test('drag a topic onto another topic to re-parent it', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '＋ 新規作成' }).click();
-  await expect(topic(page, '中心トピック')).toBeVisible();
+  await expect(page.locator('.topic-root')).toBeVisible();
   await page.keyboard.press('Tab');
   await typeTopic(page, 'A');
   await page.keyboard.press('Tab');
   await typeTopic(page, 'A1');
-  await topic(page, '中心トピック').click();
+  await page.locator('.topic-root').click();
   await page.keyboard.press('Tab');
   await typeTopic(page, 'B');
 
@@ -99,7 +99,7 @@ test('drag a topic onto another topic to re-parent it', async ({ page }) => {
   await page.mouse.up();
 
   // A1 is now laid out on B's side (left), i.e. left of the root.
-  const root = await topic(page, '中心トピック').boundingBox();
+  const root = await page.locator('.topic-root').boundingBox();
   await expect(async () => {
     const moved = await topic(page, 'A1').boundingBox();
     expect(moved!.x + moved!.width).toBeLessThan(root!.x);
