@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import * as tree from '../model/tree';
-import type { DisplayStatus, MindMapDoc, NodeId, Side } from '../model/types';
+import type { ColorTheme, DesignPreset, DisplayStatus, MindMapDoc, NodeId, Side, TextColor } from '../model/types';
 
 const HISTORY_LIMIT = 200;
 
 interface EditorState {
   doc: MindMapDoc | null;
   selectedId: NodeId | null;
+  selectedIds: NodeId[];
   editingId: NodeId | null;
   /** Uncommitted title while typing in the toolbar or the root topic; shown live in both places. */
   titleDraft: string | null;
@@ -25,6 +26,13 @@ interface EditorState {
   setText: (id: NodeId, text: string) => void;
   moveNode: (id: NodeId, newParentId: NodeId, side?: Side) => void;
   setSide: (id: NodeId, side: Side) => void;
+  setDesignPreset: (value: DesignPreset) => void;
+  setColorTheme: (value: ColorTheme) => void;
+  setSelection: (ids: NodeId[]) => void;
+  bulkSetColor: (value: TextColor) => void;
+  bulkSetStatus: (value: DisplayStatus) => void;
+  bulkSetRoutine: (value: boolean) => void;
+  bulkDelete: () => void;
   setTitle: (title: string) => void;
   setTitleDraft: (draft: string | null) => void;
   /**
@@ -76,6 +84,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
   return {
     doc: null,
     selectedId: null,
+    selectedIds: [],
     editingId: null,
     titleDraft: null,
     past: [],
@@ -83,9 +92,10 @@ export const useEditorStore = create<EditorState>()((set, get) => {
 
     load: (doc) => {
       coalesceKey = null;
-      set({ doc, selectedId: doc?.rootId ?? null, editingId: null, titleDraft: null, past: [], future: [] });
+      set({ doc, selectedId: doc?.rootId ?? null, selectedIds: [], editingId: null, titleDraft: null, past: [], future: [] });
     },
-    select: (selectedId) => set({ selectedId, editingId: null }),
+    select: (selectedId) => set({ selectedId, selectedIds: selectedId && selectedId !== get().doc?.rootId ? [selectedId] : [], editingId: null }),
+    setSelection: (selectedIds) => set({ selectedIds, selectedId: selectedIds.at(-1) ?? null, editingId: null }),
     startEditing: (id) => {
       const t = target(id);
       if (t) set({ selectedId: t, editingId: t });
@@ -132,6 +142,25 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     setSide: (id, side) => {
       const { doc } = get();
       if (doc) commit(tree.setSide(doc, id, side));
+    },
+    setDesignPreset: (value) => { const { doc } = get(); if (doc && doc.designPreset !== value) commit({ ...doc, designPreset: value }); },
+    setColorTheme: (value) => { const { doc } = get(); if (doc && doc.colorTheme !== value) commit({ ...doc, colorTheme: value }); },
+    bulkSetColor: (value) => {
+      const { doc, selectedIds } = get(); if (!doc) return;
+      let next = doc; for (const id of selectedIds.filter((id) => id !== doc.rootId)) next = tree.setAttributes(next, id, { textColor: value }); commit(next);
+    },
+    bulkSetStatus: (value) => {
+      const { doc, selectedIds } = get(); if (!doc) return;
+      let next = doc; for (const id of selectedIds.filter((id) => id !== doc.rootId)) next = tree.setStatus(next, id, value); commit(next);
+    },
+    bulkSetRoutine: (value) => {
+      const { doc, selectedIds } = get(); if (!doc) return;
+      let next = doc; for (const id of selectedIds.filter((id) => id !== doc.rootId)) next = tree.setAttributes(next, id, { routine: value }); commit(next);
+    },
+    bulkDelete: () => {
+      const { doc, selectedIds } = get(); if (!doc) return;
+      const roots = selectedIds.filter((id) => id !== doc.rootId && !selectedIds.some((other) => other !== id && tree.isDescendant(doc.nodes, other, id)));
+      let next = doc; for (const id of roots) next = tree.removeNode(next, id); commit(next, { selectedIds: [], selectedId: next.rootId });
     },
     setTitle: (title) => {
       const { doc } = get();

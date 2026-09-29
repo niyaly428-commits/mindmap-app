@@ -1,6 +1,8 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { MindMapDoc } from '../model/types';
 
+export interface MapAsset { id: string; mapId: string; blob: Blob; type: string; createdAt: number }
+
 /**
  * Local database (IndexedDB via Dexie).
  *
@@ -11,10 +13,12 @@ import type { MindMapDoc } from '../model/types';
  */
 export class MindMapDB extends Dexie {
   maps!: EntityTable<MindMapDoc, 'id'>;
+  assets!: EntityTable<MapAsset, 'id'>;
 
   constructor(name = 'mindmap-app') {
     super(name);
     this.version(1).stores({ maps: 'id, updatedAt' });
+    this.version(2).stores({ maps: 'id, updatedAt', assets: 'id, mapId' });
   }
 }
 

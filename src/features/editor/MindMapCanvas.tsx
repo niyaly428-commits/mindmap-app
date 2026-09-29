@@ -31,7 +31,7 @@ function toFlow(
   const edges: Edge[] = [];
   for (const box of boxes.values()) {
     const node = doc.nodes[box.id];
-    const color = branchColor(box.branch);
+    const color = branchColor(box.branch, doc.colorTheme);
     nodes.push({
       id: box.id,
       type: 'topic',
@@ -50,6 +50,8 @@ function toFlow(
         dueDate: node.dueDate,
         bold: node.bold,
         textColor: node.textColor,
+        routine: node.routine,
+        images: node.images,
       },
     });
     if (node.parentId) {
@@ -90,6 +92,41 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
   const flow = useMemo(() => toFlow(doc, boxes, sizes), [doc, boxes, sizes]);
   const [nodes, setNodes] = useState(flow.nodes);
   const drag = useRef<{ ids: Set<NodeId> } | null>(null);
+  const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    const root = document.querySelector('.react-flow');
+    if (!root) return;
+    let start: { x: number; y: number } | null = null;
+    const down = (event: PointerEvent) => {
+      const target = event.target as Element;
+      if (event.button !== 0 || !target.closest('.react-flow__pane') || target.closest('.react-flow__node')) return;
+      start = { x: event.clientX, y: event.clientY };
+      event.preventDefault(); event.stopPropagation();
+      (root as HTMLElement).setPointerCapture?.(event.pointerId);
+      setSelectionRect({ left: start.x, top: start.y, width: 0, height: 0 });
+    };
+    const move = (event: PointerEvent) => {
+      if (!start) return;
+      event.preventDefault();
+      setSelectionRect({ left: Math.min(start.x, event.clientX), top: Math.min(start.y, event.clientY), width: Math.abs(start.x-event.clientX), height: Math.abs(start.y-event.clientY) });
+    };
+    const up = (event: PointerEvent) => {
+      if (!start) return;
+      const rect = { left: Math.min(start.x, event.clientX), right: Math.max(start.x, event.clientX), top: Math.min(start.y, event.clientY), bottom: Math.max(start.y, event.clientY) };
+      if (Math.abs(start.x-event.clientX) > 5 || Math.abs(start.y-event.clientY) > 5) {
+        const ids = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id]')).filter((el) => {
+          const r = el.getBoundingClientRect(); return r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top;
+        }).map((el) => el.dataset.id!).filter((id) => id !== doc.rootId);
+        useEditorStore.getState().setSelection(ids);
+      }
+      start = null; setSelectionRect(null);
+    };
+    root.addEventListener('pointerdown', down as EventListener, true);
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', up, true);
+    return () => { root.removeEventListener('pointerdown', down as EventListener, true); window.removeEventListener('pointermove', move, true); window.removeEventListener('pointerup', up, true); };
+  }, [doc.rootId]);
 
   useEffect(() => setNodes(flow.nodes), [flow.nodes]);
 
@@ -156,10 +193,12 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
   );
 
   return (
+    <>
     <ReactFlow
       nodes={nodes}
       edges={flow.edges}
       nodeTypes={nodeTypes}
+      onNodeDoubleClick={(_, node) => useEditorStore.getState().startEditing(node.id)}
       onNodesChange={onNodesChange}
       onNodeClick={(_, n) => useEditorStore.getState().select(n.id)}
       onNodeContextMenu={(e, n) => {
@@ -187,5 +226,7 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#d6d3c8" />
       <Controls showInteractive={false} />
     </ReactFlow>
+    {selectionRect && <div className="selection-rectangle" style={{ left: selectionRect.left, top: selectionRect.top, width: selectionRect.width, height: selectionRect.height }} />}
+    </>
   );
 }

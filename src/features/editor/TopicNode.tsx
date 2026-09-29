@@ -8,6 +8,7 @@ import { useDragStore } from './dragStore';
 import { CalendarIcon, LinkIcon, NoteIcon, STATUS_LABELS, StatusIcon, TEXT_COLORS } from './icons';
 import { openPopover } from './popoverStore';
 import { StatusOptions } from './Popovers';
+import { mapRepository } from '../../db/mapRepository';
 
 export type TopicNodeData = {
   text: string;
@@ -21,6 +22,8 @@ export type TopicNodeData = {
   dueDate?: string;
   bold?: boolean;
   textColor?: TextColor;
+  routine?: boolean;
+  images?: string[];
 };
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
@@ -34,8 +37,23 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
   const editing = useEditorStore((s) => s.editingId === id);
   const isDropTarget = useDragStore((s) => s.dropTargetId === id);
   const isDragging = useDragStore((s) => s.draggingIds.has(id));
+  const selectedMany = useEditorStore((s) => s.selectedIds.includes(id));
   const titleDraft = useEditorStore((s) => (data.depth === 0 ? s.titleDraft : null));
   const { startEditing, select } = useEditorStore.getState();
+  const [imageUrls, setImageUrls] = useState<{ id: string; url: string }[]>([]);
+  const [preview, setPreview] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    const urls: { id: string; url: string }[] = [];
+    Promise.all((data.images ?? []).map(async (assetId) => {
+      const blob = await mapRepository.getImage(assetId);
+      if (blob) urls.push({ id: assetId, url: URL.createObjectURL(blob) });
+    })).then(() => { if (active) setImageUrls(urls); else urls.forEach((x) => URL.revokeObjectURL(x.url)); });
+    return () => { active = false; urls.forEach((x) => URL.revokeObjectURL(x.url)); };
+  // Track serialized asset IDs, not the transient URL array.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(data.images ?? []).join('|')]);
+  useEffect(() => { if (!preview) return; const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setPreview(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [preview]);
 
   const level = data.depth === 0 ? 'root' : data.depth === 1 ? 'main' : 'sub';
   const className = [
@@ -46,6 +64,8 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
     isDragging && 'is-dragging',
     data.status === 'done' && 'is-checked',
     data.dueDate && `has-due due-${dueState(data.dueDate)}`,
+    data.routine && 'is-routine',
+    selectedMany && 'is-multi-selected',
   ]
     .filter(Boolean)
     .join(' ');
@@ -73,6 +93,7 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
       <Handle type="target" position={Position.Left} id="tl" style={hidden} isConnectable={false} />
       <Handle type="target" position={Position.Right} id="tr" style={hidden} isConnectable={false} />
       {data.depth > 0 && <StatusControl id={id} status={data.status} />}
+      {data.routine && <span className="routine-mark" title="Routine">↻</span>}
       {editing ? (
         <>
           <EditToolbar id={id} bold={!!data.bold} textColor={data.textColor} />
@@ -132,6 +153,8 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
           <LinkIcon />
         </a>
       )}
+      {imageUrls.length > 0 && <div className="topic-images">{imageUrls.map((image) => <span key={image.id}><button aria-label="画像を拡大" onPointerDown={stop} onClick={(e) => { e.stopPropagation(); setPreview(image.url); }}><img src={image.url} /></button><button className="image-remove" aria-label="画像を削除" onPointerDown={stop} onClick={(e) => { e.stopPropagation(); useEditorStore.getState().setAttributes(id, { images: (data.images ?? []).filter((assetId) => assetId !== image.id) }); }}>×</button></span>)}</div>}
+      {preview && <div className="image-lightbox" role="dialog" onClick={() => setPreview(null)}><button className="lightbox-close" onClick={() => setPreview(null)}>×</button><img src={preview} /></div>}
     </div>
   );
 }

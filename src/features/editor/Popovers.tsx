@@ -68,6 +68,7 @@ export function StatusOptions({ nodeId, onDone }: { nodeId: NodeId; onDone: () =
 function ContextMenu({ nodeId, x, y }: { nodeId: NodeId; x: number; y: number }) {
   const isRoot = useEditorStore((s) => s.doc!.rootId === nodeId);
   const status = useEditorStore((s) => displayStatus(s.doc!.nodes[nodeId]));
+  const routine = useEditorStore((s) => !!s.doc!.nodes[nodeId].routine);
   const [subOpen, setSubOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
@@ -93,6 +94,7 @@ function ContextMenu({ nodeId, x, y }: { nodeId: NodeId; x: number; y: number })
         <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'due', nodeId })}>
           <CalendarIcon size={14} /> 期日
         </button>
+        {!isRoot && <button role="menuitemcheckbox" aria-checked={routine} className="menu-item" onClick={() => { useEditorStore.getState().setAttributes(nodeId, { routine: !routine }); closePopover(); }}>{routine ? '✓ ' : ''}ルーティンタスク</button>}
         {!isRoot && (
           <div className="menu-sub" onMouseEnter={() => setSubOpen(true)} onMouseLeave={() => setSubOpen(false)}>
             <button

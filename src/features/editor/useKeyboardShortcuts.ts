@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { sideOf } from '../../model/tree';
 import type { MindMapDoc, NodeId } from '../../model/types';
-import { closePopover, usePopoverStore } from './popoverStore';
+import { closePopover, openPopover, usePopoverStore } from './popoverStore';
 
 const isTextInput = (el: EventTarget | null) =>
-  el instanceof HTMLElement &&
+  typeof HTMLElement !== 'undefined' && el instanceof HTMLElement &&
   (el.isContentEditable ||
     ['TEXTAREA', 'SELECT'].includes(el.tagName) ||
     (el instanceof HTMLInputElement && !['checkbox', 'radio', 'button'].includes(el.type)));
@@ -33,7 +33,13 @@ function neighbor(doc: MindMapDoc, id: NodeId, key: string): NodeId | null {
 
 export function useKeyboardShortcuts() {
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
+    const onKeyDown = (e: KeyboardEvent) => handleKeyboardShortcut(e);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+}
+
+export function handleKeyboardShortcut(e: KeyboardEvent) {
       if (e.isComposing || isTextInput(e.target)) return;
       // While a menu / memo / link popup is open, keys belong to it (Escape closes it).
       if (usePopoverStore.getState().popover) {
@@ -48,6 +54,17 @@ export function useKeyboardShortcuts() {
       if (mod && key.toLowerCase() === 'z') return e.preventDefault(), e.shiftKey ? s.redo() : s.undo();
       if (mod && key.toLowerCase() === 'y') return e.preventDefault(), s.redo();
       if (mod && key.toLowerCase() === 'b') return e.preventDefault(), s.toggleBold();
+      if (mod && ['m', 'k', 'd'].includes(key.toLowerCase())) {
+        if (!s.selectedId || s.selectedId === s.doc.rootId) return;
+        e.preventDefault();
+        openPopover({ kind: key.toLowerCase() === 'm' ? 'note' : key.toLowerCase() === 'k' ? 'link' : 'due', nodeId: s.selectedId });
+        return;
+      }
+      if (mod && e.shiftKey && key.toLowerCase() === 'i') {
+        e.preventDefault();
+        window.dispatchEvent(new Event('mindmap:add-image'));
+        return;
+      }
       if (mod || e.altKey || !s.selectedId) return;
 
       const id = s.selectedId;
@@ -80,8 +97,4 @@ export function useKeyboardShortcuts() {
           return;
         }
       }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
 }

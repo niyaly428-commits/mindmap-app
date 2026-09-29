@@ -10,6 +10,8 @@ export type DisplayStatus = TaskStatus | 'done';
 
 /** Topic text colors; undefined = default (black / white on filled main topics). */
 export type TextColor = 'black' | 'red' | 'blue' | 'orange';
+export type DesignPreset = 'soft-organic' | 'clean-structured' | 'soft-analytical';
+export type ColorTheme = 'calm-blue' | 'natural' | 'elegant' | 'fresh' | 'monochrome';
 
 /**
  * A single topic in the mind map.
@@ -40,6 +42,8 @@ export interface MindNode {
   tags?: string[];
   /** Reference to a Blob stored in the `assets` table (future). */
   image?: { assetId: string; width: number; height: number };
+  images?: string[];
+  routine?: boolean;
 }
 
 export interface MindMapDoc {
@@ -50,6 +54,8 @@ export interface MindMapDoc {
   nodes: Record<NodeId, MindNode>;
   createdAt: number;
   updatedAt: number;
+  designPreset?: DesignPreset;
+  colorTheme?: ColorTheme;
 }
 
 export interface MindMapSummary {

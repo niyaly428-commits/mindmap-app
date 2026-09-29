@@ -100,4 +100,29 @@ describe('createNextDayMap', () => {
     expect(next.id).not.toBe(src.id);
     for (const id of Object.keys(next.nodes)) expect(src.nodes[id]).toBeUndefined();
   });
+
+  it('always carries routine main tasks, including completed ones, and preserves the routine flag', () => {
+    let source = createMap('Routine');
+    const routine = addChild(source, source.rootId, 'Every day'); source = routine.doc;
+    source = setAttributes(source, routine.id, { routine: true });
+    source = setStatus(source, routine.id, 'done');
+    const ordinary = addChild(source, source.rootId, 'One off'); source = setStatus(ordinary.doc, ordinary.id, 'done');
+    const next = createNextDayMap(source, 2000);
+    const copied = next.nodes[next.rootId].children.map((id) => next.nodes[id]);
+    expect(copied.map((n) => n.text)).toEqual(['Every day']);
+    expect(copied[0].routine).toBe(true);
+    expect(copied[0].checked).toBe(true);
+  });
+
+  it('keeps a routine descendant even inside an otherwise completed main branch', () => {
+    let source = createMap('Routine descendant');
+    const branch = addChild(source, source.rootId, 'Finished branch'); source = branch.doc;
+    const daily = addChild(source, branch.id, 'Daily check'); source = setAttributes(daily.doc, daily.id, { routine: true });
+    source = setStatus(source, branch.id, 'done');
+    const next = createNextDayMap(source);
+    const main = next.nodes[next.rootId].children.map((id) => next.nodes[id]);
+    expect(main.map((n) => n.text)).toEqual(['Finished branch']);
+    const copiedRoutine = next.nodes[main[0].children[0]];
+    expect(copiedRoutine).toMatchObject({ text: 'Daily check', routine: true });
+  });
 });

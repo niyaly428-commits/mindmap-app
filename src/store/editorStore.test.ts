@@ -109,4 +109,26 @@ describe('editorStore', () => {
     s().toggleChecked();
     expect(s().doc!.nodes[id].checked).toBe(true);
   });
+
+  it('persists independent presets and themes in the document', () => {
+    s().setDesignPreset('soft-analytical');
+    s().setColorTheme('natural');
+    expect(s().doc).toMatchObject({ designPreset: 'soft-analytical', colorTheme: 'natural' });
+    s().undo(); expect(s().doc!.colorTheme).toBeUndefined();
+    s().undo(); expect(s().doc!.designPreset).toBeUndefined();
+  });
+
+  it('applies bulk edits as one undoable operation', () => {
+    s().addChild(); const a = s().selectedId!;
+    s().addSibling(a); const b = s().selectedId!;
+    s().setSelection([a, b]);
+    s().bulkSetColor('red'); s().undo();
+    expect(s().doc!.nodes[a].textColor).toBeUndefined();
+    s().bulkSetStatus('waiting'); s().bulkSetRoutine(true);
+    expect(s().doc!.nodes[a]).toMatchObject({ status: 'waiting', routine: true });
+    s().undo(); expect(s().doc!.nodes[a].routine).toBeUndefined();
+    s().setSelection([a, b]); s().bulkDelete();
+    expect(s().doc!.nodes[a]).toBeUndefined(); expect(s().doc!.nodes[b]).toBeUndefined();
+    s().undo(); expect(s().doc!.nodes[a]).toBeDefined(); expect(s().doc!.nodes[b]).toBeDefined();
+  });
 });

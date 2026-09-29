@@ -49,4 +49,21 @@ describe('mapRepository (IndexedDB)', () => {
     expect(stored.nodes[stored.rootId].children.map((id) => stored.nodes[id].text)).toEqual(['外注']);
     expect(await r.list()).toHaveLength(2);
   });
+
+  it('persists image blobs and clones them into the next map', async () => {
+    db = new MindMapDB(`test-${Math.random()}`);
+    const r = repo(); const map = await r.create('Images');
+    const added = addChild(map, map.rootId, 'Photo');
+    const assetId = await r.addImage(map.id, new Blob(['pixels'], { type: 'image/png' }));
+    added.doc.nodes[added.id].images = [assetId]; await r.save(added.doc);
+    expect(await (await r.getImage(assetId))!.text()).toBe('pixels');
+    const next = await r.createNextDay(map.id);
+    const copiedId = next!.nodes[next!.rootId].children[0];
+    const copiedAssetId = next!.nodes[copiedId].images![0];
+    expect(copiedAssetId).not.toBe(assetId);
+    expect(await (await r.getImage(copiedAssetId))!.text()).toBe('pixels');
+    await r.remove(map.id);
+    expect(await r.getImage(assetId)).toBeUndefined();
+    expect(await r.getImage(copiedAssetId)).toBeDefined();
+  });
 });

@@ -58,9 +58,15 @@ export function nextDayTitle(title: string, fallback: Date): string {
   return `タスク_${n.m}月${n.d}日`;
 }
 
-function copySubtree(src: Record<NodeId, MindNode>, id: NodeId, parentId: NodeId, out: Record<NodeId, MindNode>) {
+function hasRoutine(src: Record<NodeId, MindNode>, id: string): boolean {
+  const node = src[id];
+  return !!node.routine || node.children.some((child) => hasRoutine(src, child));
+}
+
+function copySubtree(src: Record<NodeId, MindNode>, id: NodeId, parentId: NodeId, out: Record<NodeId, MindNode>, keepWholeBranch = true) {
   const newId = createId();
-  const children = src[id].children.map((c) => copySubtree(src, c, newId, out));
+  const includedChildren = keepWholeBranch ? src[id].children : src[id].children.filter((child) => hasRoutine(src, child));
+  const children = includedChildren.map((c) => copySubtree(src, c, newId, out, keepWholeBranch || !!src[c].routine));
   out[newId] = { ...src[id], id: newId, parentId, children };
   return newId;
 }
@@ -74,8 +80,8 @@ export function createNextDayMap(source: MindMapDoc, now = Date.now()): MindMapD
   const doc = createMap(nextDayTitle(source.title, new Date(source.createdAt)), now);
   const nodes = { ...doc.nodes };
   const carried = source.nodes[source.rootId].children
-    .filter((id) => !source.nodes[id].checked)
-    .map((id) => copySubtree(source.nodes, id, doc.rootId, nodes));
+    .filter((id) => source.nodes[id].routine || !source.nodes[id].checked || hasRoutine(source.nodes, id))
+    .map((id) => copySubtree(source.nodes, id, doc.rootId, nodes, !source.nodes[id].checked || !!source.nodes[id].routine));
   nodes[doc.rootId] = { ...nodes[doc.rootId], children: carried };
   return { ...doc, nodes };
 }

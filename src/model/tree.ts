@@ -141,7 +141,7 @@ export function setTitle(doc: MindMapDoc, title: string): MindMapDoc {
 /** Older maps stored the title and root text separately; the title wins. */
 export const syncRootWithTitle = (doc: MindMapDoc): MindMapDoc => setTitle(doc, doc.title);
 
-export type NodeAttributes = Pick<MindNode, 'note' | 'link' | 'dueDate' | 'bold' | 'textColor'>;
+export type NodeAttributes = Pick<MindNode, 'note' | 'link' | 'dueDate' | 'bold' | 'textColor' | 'routine' | 'images'>;
 
 /**
  * Sets optional attributes; `undefined`, `false`, empty strings and the default color remove the attribute.
@@ -154,7 +154,7 @@ export function setAttributes(doc: MindMapDoc, id: NodeId, attrs: Partial<NodeAt
   let changed = false;
   for (const key of Object.keys(attrs) as (keyof NodeAttributes)[]) {
     const raw = attrs[key];
-    const value = raw === 'black' || !raw ? undefined : raw;
+    const value = raw === 'black' || !raw || (Array.isArray(raw) && raw.length === 0) ? undefined : raw;
     if (next[key] === value) continue;
     changed = true;
     if (value === undefined) delete next[key];
