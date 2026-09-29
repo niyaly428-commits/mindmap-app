@@ -7,6 +7,7 @@ Personal XMind-like mind map + task app. Browser-only (no server/login). This pr
 - `npm test` — unit tests (Vitest; IndexedDB via fake-indexeddb)
 - `npm run test:e2e` — E2E (Playwright, uses installed Microsoft Edge via `channel: 'msedge'`, port 5188)
 - `npm run typecheck` / `npm run build`
+- `npm run deploy` — deploy to Vercel production (CLI already logged in; project `mindmap-app`, URL https://mindmap-app-umber.vercel.app). Verify with `E2E_BASE_URL=https://mindmap-app-umber.vercel.app npm run test:e2e`.
 - Install deps with `npm install --before=<date 7+ days ago>` (exact versions pinned via .npmrc).
 
 ## Architecture

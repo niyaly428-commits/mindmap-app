@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "vercel deploy --prod --yes"
   },
   "dependencies": {
     "@xyflow/react": "12.11.6",
@@ -26,6 +27,7 @@
     "@vitejs/plugin-react": "6.1.1",
     "fake-indexeddb": "6.2.5",
     "typescript": "5.9.3",
+    "vercel": "59.23.2",
     "vite": "8.3.0",
     "vitest": "5.0.1"
   }

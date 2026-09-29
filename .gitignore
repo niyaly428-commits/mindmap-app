@@ -7,3 +7,5 @@ test-results
 playwright-report
 *.log
 .devin/config.local.json
+
+.vercel
