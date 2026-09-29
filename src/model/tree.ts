@@ -1,4 +1,4 @@
-import type { MindMapDoc, MindNode, NodeId, Side } from './types';
+import type { DisplayStatus, MindMapDoc, MindNode, NodeId, Side } from './types';
 
 export const DEFAULT_MAP_TITLE = '無題のマインドマップ';
 export const DEFAULT_TOPIC_TEXT = '新しいトピック';
@@ -58,6 +58,13 @@ export function sideOf(doc: MindMapDoc, id: NodeId): Side | null {
   return branch ? (doc.nodes[branch].side ?? 'right') : null;
 }
 
+/** Completing a task clears its in-progress status, so un-completing it returns to "未着手". */
+function withChecked(node: MindNode, checked: boolean): MindNode {
+  const next = { ...node, checked };
+  if (checked) delete next.status;
+  return next;
+}
+
 /** Parent is checked iff it has children and all of them are checked. Walks up from `startId`. */
 function syncAncestors(nodes: Nodes, startId: NodeId | null): void {
   let cur = startId;
@@ -65,7 +72,7 @@ function syncAncestors(nodes: Nodes, startId: NodeId | null): void {
     const node = nodes[cur];
     if (node.children.length > 0) {
       const all = node.children.every((c) => nodes[c].checked);
-      if (all !== node.checked) nodes[cur] = { ...node, checked: all };
+      if (all !== node.checked) nodes[cur] = withChecked(node, all);
     }
     cur = node.parentId;
   }
@@ -134,16 +141,20 @@ export function setTitle(doc: MindMapDoc, title: string): MindMapDoc {
 /** Older maps stored the title and root text separately; the title wins. */
 export const syncRootWithTitle = (doc: MindMapDoc): MindMapDoc => setTitle(doc, doc.title);
 
-type NodeAttributes = Pick<MindNode, 'status' | 'note' | 'link'>;
+export type NodeAttributes = Pick<MindNode, 'note' | 'link' | 'dueDate' | 'bold' | 'textColor'>;
 
-/** Sets optional attributes; `undefined` or empty strings remove the attribute. */
+/**
+ * Sets optional attributes; `undefined`, `false`, empty strings and the default color remove the attribute.
+ * (Status/completion are changed via `setStatus` / `setChecked` so parent/child propagation stays consistent.)
+ */
 export function setAttributes(doc: MindMapDoc, id: NodeId, attrs: Partial<NodeAttributes>): MindMapDoc {
   const node = doc.nodes[id];
   if (!node) return doc;
   const next: MindNode = { ...node };
   let changed = false;
   for (const key of Object.keys(attrs) as (keyof NodeAttributes)[]) {
-    const value = attrs[key] || undefined;
+    const raw = attrs[key];
+    const value = raw === 'black' || !raw ? undefined : raw;
     if (next[key] === value) continue;
     changed = true;
     if (value === undefined) delete next[key];
@@ -156,9 +167,26 @@ export function setChecked(doc: MindMapDoc, id: NodeId, checked: boolean): MindM
   const node = doc.nodes[id];
   if (!node) return doc;
   const nodes: Nodes = { ...doc.nodes };
-  for (const d of [id, ...descendantIds(nodes, id)]) nodes[d] = { ...nodes[d], checked };
+  for (const d of [id, ...descendantIds(nodes, id)]) nodes[d] = withChecked(nodes[d], checked);
   syncAncestors(nodes, node.parentId);
   return withNodes(doc, nodes);
+}
+
+export const displayStatus = (node: MindNode): DisplayStatus => (node.checked ? 'done' : (node.status ?? 'todo'));
+
+/**
+ * "完了" completes the task (and, as before, its descendants; parents complete when all children are done).
+ * Other statuses un-complete the task if needed and then set only this task's status.
+ */
+export function setStatus(doc: MindMapDoc, id: NodeId, status: DisplayStatus): MindMapDoc {
+  const node = doc.nodes[id];
+  if (!node || displayStatus(node) === status) return doc;
+  if (status === 'done') return setChecked(doc, id, true);
+  const base = node.checked ? setChecked(doc, id, false) : doc;
+  const cur = base.nodes[id];
+  const next: MindNode = { ...cur, status };
+  if (status === 'todo') delete next.status;
+  return withNodes(base, { ...base.nodes, [id]: next });
 }
 
 export const toggleChecked = (doc: MindMapDoc, id: NodeId): MindMapDoc =>

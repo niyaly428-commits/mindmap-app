@@ -1,21 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const topic = (page: Page, text: string) => page.locator('.topic', { hasText: new RegExp(`^${escape(text)}$`) });
-
-async function typeTopic(page: Page, text: string) {
-  const editor = page.locator('.topic-editor');
-  await expect(editor).toBeFocused();
-  await editor.fill(text);
-  await editor.press('Enter');
-  await expect(editor).toHaveCount(0);
-}
-
-async function newMap(page: Page) {
-  await page.goto('/');
-  await page.getByRole('button', { name: '＋ 新規作成' }).click();
-  await expect(page.locator('.topic-root')).toBeVisible();
-}
+import { expect, test, type Page } from '@playwright/test';
+import { chooseStatus, newMap, openMenu, statusOf, topic, typeTopic } from './helpers';
 
 async function expectNoOverlap(page: Page) {
   await expect(async () => {
@@ -104,27 +88,22 @@ test('title and root topic stay in sync both ways', async ({ page }) => {
   await expect(page.locator('.card', { hasText: 'タスク_9月29日' })).toBeVisible();
 });
 
-async function openMenu(node: Locator) {
-  await node.click({ button: 'right' });
-  await expect(node.page().getByRole('menu').first()).toBeVisible();
-}
-
 test('context menu: status, memo (with URL) and link are shown, editable and persisted', async ({ page }) => {
   await newMap(page);
   await page.keyboard.press('Tab');
   await typeTopic(page, '外注');
   const node = topic(page, '外注');
 
-  // Status
+  // Status (via the context menu)
   await openMenu(node);
-  await expect(page.getByRole('menuitem')).toHaveText([/メモ/, /リンク/, /ステータス/]);
+  await expect(page.getByRole('menuitem')).toHaveText([/メモ/, /リンク/, /期日/, /ステータス/]);
   await page.getByRole('menuitem', { name: /ステータス/ }).hover();
   await page.getByRole('menuitemradio', { name: /進行中/ }).click();
   await expect(node.locator('.topic-status')).toHaveAttribute('title', '進行中');
   await openMenu(node);
   await page.getByRole('menuitem', { name: /ステータス/ }).click();
-  await page.getByRole('menuitemradio', { name: /先方待ち/ }).click();
-  await expect(node.locator('.topic-status')).toHaveAttribute('title', '先方待ち');
+  await page.getByRole('menuitemradio', { name: /待ち/ }).click();
+  await expect(node.locator('.topic-status')).toHaveAttribute('title', '待ち');
 
   // Memo: no icon until a memo exists.
   await expect(node.getByLabel('メモを表示')).toHaveCount(0);
@@ -136,22 +115,19 @@ test('context menu: status, memo (with URL) and link are shown, editable and per
   await memo.pressSequentially('お疲れ様です。 ');
   await memo.press('Delete');
   await memo.fill('お疲れ様です。\n確認用 https://example.com/sheet?id=1\nよろしくお願いします。');
-  await page.getByRole('button', { name: '保存' }).click();
-  await expect(node.locator('input[type=checkbox]')).not.toBeChecked();
-  await expect(node).toBeVisible();
+  await expect(statusOf(page, '外注')).not.toBeChecked();
   const icon = node.getByLabel('メモを表示');
-  await expect(icon).toBeVisible();
-
-  await icon.click();
-  const view = page.locator('.note-view');
-  await expect(view).toContainText('お疲れ様です。');
-  await expect(view.getByRole('link', { name: 'https://example.com/sheet?id=1' })).toHaveAttribute(
+  await expect(icon).toBeVisible(); // auto-saved
+  await expect(page.locator('.note-links').getByRole('link', { name: /example\.com\/sheet/ })).toHaveAttribute(
     'href',
     'https://example.com/sheet?id=1',
   );
-  await page.getByRole('button', { name: '編集' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.popover')).toHaveCount(0);
+
+  await icon.click();
+  await expect(page.locator('.note-editor')).toHaveValue(/お疲れ様です。/);
   await page.locator('.note-editor').fill('更新したメモ');
-  await page.getByRole('button', { name: '保存' }).click();
   await page.keyboard.press('Escape');
   await expect(page.locator('.popover')).toHaveCount(0);
 
@@ -172,10 +148,10 @@ test('context menu: status, memo (with URL) and link are shown, editable and per
   await page.waitForTimeout(600);
   await page.reload();
   const reloaded = topic(page, '外注');
-  await expect(reloaded.locator('.topic-status')).toHaveAttribute('title', '先方待ち');
+  await expect(reloaded.locator('.topic-status')).toHaveAttribute('title', '待ち');
   await expect(reloaded.getByLabel('リンクを開く')).toHaveAttribute('href', 'https://example.com/docs');
   await reloaded.getByLabel('メモを表示').click();
-  await expect(page.locator('.note-view')).toHaveText('更新したメモ');
+  await expect(page.locator('.note-editor')).toHaveValue('更新したメモ');
 });
 
 test('create the next day map carrying over unfinished main topics', async ({ page }) => {
@@ -194,16 +170,16 @@ test('create the next day map carrying over unfinished main topics', async ({ pa
   await typeTopic(page, 'B');
   await page.keyboard.press('Enter');
   await typeTopic(page, 'C');
-  await topic(page, 'A').locator('input').click();
-  await topic(page, 'C').locator('input').click();
+  await chooseStatus(page, 'A', '完了');
+  await chooseStatus(page, 'C', '完了');
 
   await root.click();
   await page.keyboard.press('Tab');
   await typeTopic(page, '完了');
   await page.keyboard.press('Tab');
   await typeTopic(page, 'D');
-  await topic(page, '完了').locator('input').click();
-  await expect(topic(page, '完了').locator('input')).toBeChecked();
+  await chooseStatus(page, '完了', '完了');
+  await expect(statusOf(page, '完了')).toBeChecked();
 
   await page.waitForTimeout(600);
   await page.getByRole('button', { name: '← 一覧' }).click();
@@ -215,10 +191,10 @@ test('create the next day map carrying over unfinished main topics', async ({ pa
   await nextCard.locator('.card-body').click();
   await expect(page.getByLabel('マップのタイトル')).toHaveValue('タスク_9月30日');
   await expect(page.locator('.topic-root')).toHaveText('タスク_9月30日');
-  await expect(topic(page, '外注').locator('input')).not.toBeChecked();
-  await expect(topic(page, 'A').locator('input')).toBeChecked();
-  await expect(topic(page, 'B').locator('input')).not.toBeChecked();
-  await expect(topic(page, 'C').locator('input')).toBeChecked();
+  await expect(statusOf(page, '外注')).not.toBeChecked();
+  await expect(statusOf(page, 'A')).toBeChecked();
+  await expect(statusOf(page, 'B')).not.toBeChecked();
+  await expect(statusOf(page, 'C')).toBeChecked();
   await expect(topic(page, '完了')).toHaveCount(0);
   await expect(topic(page, 'D')).toHaveCount(0);
 

@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { normalizeUrl, splitUrls } from '../../lib/url';
-import type { NodeId } from '../../model/types';
+import { formatDue } from '../../lib/date';
+import { displayStatus } from '../../model/tree';
+import type { DisplayStatus, NodeId } from '../../model/types';
 import { closePopover, openPopover, topicRect, usePopoverStore } from './popoverStore';
-import { LinkIcon, NoteIcon, STATUS_LABELS, STATUS_ORDER, StatusIcon } from './icons';
+import { CalendarIcon, LinkIcon, NoteIcon, STATUS_LABELS, STATUS_ORDER, StatusIcon } from './icons';
+
+export const NOTE_AUTOSAVE_MS = 400;
 
 export function Popovers() {
   const popover = usePopoverStore((s) => s.popover);
@@ -13,9 +17,11 @@ export function Popovers() {
     case 'menu':
       return <ContextMenu key={popover.nodeId} nodeId={popover.nodeId} x={popover.x} y={popover.y} />;
     case 'note':
-      return <NotePopover key={popover.nodeId} nodeId={popover.nodeId} initialMode={popover.mode} />;
+      return <NotePopover key={popover.nodeId} nodeId={popover.nodeId} />;
     case 'link':
       return <LinkPopover key={popover.nodeId} nodeId={popover.nodeId} />;
+    case 'due':
+      return <DuePopover key={popover.nodeId} nodeId={popover.nodeId} />;
   }
 }
 
@@ -33,8 +39,35 @@ function Backdrop({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Status choices (未着手 / 進行中 / 待ち / 完了) shared by the context menu and the status picker on topics. */
+export function StatusOptions({ nodeId, onDone }: { nodeId: NodeId; onDone: () => void }) {
+  const current = useEditorStore((s) => displayStatus(s.doc!.nodes[nodeId]));
+  const choose = (s: DisplayStatus) => {
+    useEditorStore.getState().setStatus(nodeId, s);
+    onDone();
+  };
+  return (
+    <>
+      {STATUS_ORDER.map((s) => (
+        <button
+          key={s}
+          role="menuitemradio"
+          aria-checked={current === s}
+          className="menu-item"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => choose(s)}
+        >
+          <StatusIcon status={s} size={14} /> {STATUS_LABELS[s]}
+          {current === s && <span className="menu-check">✓</span>}
+        </button>
+      ))}
+    </>
+  );
+}
+
 function ContextMenu({ nodeId, x, y }: { nodeId: NodeId; x: number; y: number }) {
-  const status = useEditorStore((s) => s.doc!.nodes[nodeId].status);
+  const isRoot = useEditorStore((s) => s.doc!.rootId === nodeId);
+  const status = useEditorStore((s) => displayStatus(s.doc!.nodes[nodeId]));
   const [subOpen, setSubOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
@@ -47,50 +80,37 @@ function ContextMenu({ nodeId, x, y }: { nodeId: NodeId; x: number; y: number })
     });
   }, [x, y]);
 
-  const setStatus = (s: (typeof STATUS_ORDER)[number] | undefined) => {
-    useEditorStore.getState().setAttributes(nodeId, { status: s });
-    closePopover();
-  };
-
   return (
     <>
       <Backdrop onClose={closePopover} />
       <div ref={ref} className="context-menu" role="menu" style={pos} onContextMenu={(e) => e.preventDefault()}>
-        <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'note', nodeId, mode: 'edit' })}>
+        <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'note', nodeId })}>
           <NoteIcon /> メモ
         </button>
         <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'link', nodeId })}>
           <LinkIcon /> リンク
         </button>
-        <div className="menu-sub" onMouseEnter={() => setSubOpen(true)} onMouseLeave={() => setSubOpen(false)}>
-          <button
-            role="menuitem"
-            className="menu-item"
-            aria-haspopup="menu"
-            aria-expanded={subOpen}
-            onClick={() => setSubOpen(true)}
-          >
-            <StatusIcon status={status ?? 'todo'} size={14} /> ステータス <span className="menu-arrow">›</span>
-          </button>
-          {subOpen && (
-            <div className="context-menu submenu" role="menu">
-              {STATUS_ORDER.map((s) => (
-                <button key={s} role="menuitemradio" aria-checked={status === s} className="menu-item" onClick={() => setStatus(s)}>
-                  <StatusIcon status={s} size={14} /> {STATUS_LABELS[s]}
-                  {status === s && <span className="menu-check">✓</span>}
-                </button>
-              ))}
-              {status && (
-                <>
-                  <div className="menu-sep" />
-                  <button role="menuitem" className="menu-item" onClick={() => setStatus(undefined)}>
-                    ステータスを外す
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'due', nodeId })}>
+          <CalendarIcon size={14} /> 期日
+        </button>
+        {!isRoot && (
+          <div className="menu-sub" onMouseEnter={() => setSubOpen(true)} onMouseLeave={() => setSubOpen(false)}>
+            <button
+              role="menuitem"
+              className="menu-item"
+              aria-haspopup="menu"
+              aria-expanded={subOpen}
+              onClick={() => setSubOpen(true)}
+            >
+              <StatusIcon status={status} size={14} /> ステータス <span className="menu-arrow">›</span>
+            </button>
+            {subOpen && (
+              <div className="context-menu submenu" role="menu">
+                <StatusOptions nodeId={nodeId} onDone={closePopover} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
@@ -109,110 +129,103 @@ function useAnchor(nodeId: NodeId, width: number): CSSProperties {
   return style;
 }
 
-function PopoverFrame({ nodeId, width, onClose, children }: { nodeId: NodeId; width: number; onClose: () => void; children: ReactNode }) {
+function PopoverFrame({
+  nodeId,
+  width,
+  title,
+  onClose,
+  children,
+}: {
+  nodeId: NodeId;
+  width: number;
+  title: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+}) {
   const style = useAnchor(nodeId, width);
   return (
     <>
       <Backdrop onClose={onClose} />
       <div className="popover" style={style} role="dialog">
+        <div className="popover-header">
+          {title}
+          <button className="popover-close" aria-label="閉じる" onClick={onClose}>
+            ×
+          </button>
+        </div>
         {children}
       </div>
     </>
   );
 }
 
-export function LinkifiedText({ text }: { text: string }) {
-  return (
-    <>
-      {splitUrls(text).map((p, i) =>
-        p.type === 'url' ? (
-          <a key={i} href={p.value} target="_blank" rel="noopener noreferrer">
-            {p.value}
-          </a>
-        ) : (
-          <span key={i}>{p.value}</span>
-        ),
-      )}
-    </>
-  );
-}
+/**
+ * Memo: always editable, saved automatically shortly after typing stops (and when closed).
+ * URLs in the memo are listed below as clickable links.
+ */
+function NotePopover({ nodeId }: { nodeId: NodeId }) {
+  const saved = useEditorStore((s) => s.doc!.nodes[nodeId].note ?? '');
+  const [draft, setDraft] = useState(saved);
+  const draftRef = useRef(draft);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-function NotePopover({ nodeId, initialMode }: { nodeId: NodeId; initialMode: 'view' | 'edit' }) {
-  const note = useEditorStore((s) => s.doc!.nodes[nodeId].note ?? '');
-  const [mode, setMode] = useState(note ? initialMode : 'edit');
-  const [draft, setDraft] = useState(note);
-
-  const save = () => useEditorStore.getState().setAttributes(nodeId, { note: draft.trim() ? draft.replace(/\s+$/, '') : undefined });
-  const saveAndClose = () => {
-    if (mode === 'edit') save();
-    closePopover();
+  const flush = () => {
+    clearTimeout(timer.current);
+    const text = draftRef.current;
+    const note = text.trim() ? text.replace(/\s+$/, '') : undefined;
+    useEditorStore.getState().setAttributes(nodeId, { note }, { coalesce: `note:${nodeId}` });
   };
 
+  // Save any pending input when the popup closes.
+  useEffect(
+    () => () => {
+      flush();
+      useEditorStore.getState().endCoalesce();
+    },
+    [],
+  );
+
+  const urls = splitUrls(draft).filter((p) => p.type === 'url');
+
   return (
-    <PopoverFrame nodeId={nodeId} width={420} onClose={saveAndClose}>
-      <div className="popover-header">
-        <NoteIcon /> メモ
-      </div>
-      {mode === 'view' ? (
+    <PopoverFrame
+      nodeId={nodeId}
+      width={420}
+      onClose={closePopover}
+      title={
         <>
-          <div className="note-view" onDoubleClick={() => setMode('edit')}>
-            <LinkifiedText text={note} />
-          </div>
-          <div className="popover-actions">
-            <button className="btn" onClick={closePopover}>
-              閉じる
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                setDraft(note);
-                setMode('edit');
-              }}
-            >
-              編集
-            </button>
-          </div>
+          <NoteIcon /> メモ
         </>
-      ) : (
-        <>
-          <textarea
-            className="note-editor"
-            autoFocus
-            value={draft}
-            placeholder="メモを入力（URLも記載できます）"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return;
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                closePopover();
-              } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                saveAndClose();
-              }
-            }}
-          />
-          <div className="popover-actions">
-            {note && (
-              <button
-                className="btn danger-text"
-                onClick={() => {
-                  useEditorStore.getState().setAttributes(nodeId, { note: undefined });
-                  closePopover();
-                }}
-              >
-                削除
-              </button>
-            )}
-            <span className="popover-hint">Ctrl+Enter で保存</span>
-            <button className="btn" onClick={closePopover}>
-              キャンセル
-            </button>
-            <button className="btn btn-primary" onClick={saveAndClose}>
-              保存
-            </button>
-          </div>
-        </>
+      }
+    >
+      <textarea
+        className="note-editor"
+        aria-label="メモ"
+        autoFocus
+        value={draft}
+        placeholder="メモを入力（URLも記載できます）。自動で保存されます。"
+        onChange={(e) => {
+          setDraft(e.target.value);
+          draftRef.current = e.target.value;
+          clearTimeout(timer.current);
+          timer.current = setTimeout(flush, NOTE_AUTOSAVE_MS);
+        }}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            closePopover();
+          }
+        }}
+      />
+      {urls.length > 0 && (
+        <div className="note-links">
+          {urls.map((u, i) => (
+            <a key={i} href={u.value} target="_blank" rel="noopener noreferrer">
+              <LinkIcon size={12} /> {u.value}
+            </a>
+          ))}
+        </div>
       )}
     </PopoverFrame>
   );
@@ -235,10 +248,16 @@ function LinkPopover({ nodeId }: { nodeId: NodeId }) {
   };
 
   return (
-    <PopoverFrame nodeId={nodeId} width={420} onClose={closePopover}>
-      <div className="popover-header">
-        <LinkIcon /> リンク
-      </div>
+    <PopoverFrame
+      nodeId={nodeId}
+      width={420}
+      onClose={closePopover}
+      title={
+        <>
+          <LinkIcon /> リンク
+        </>
+      }
+    >
       <input
         className="link-input"
         autoFocus
@@ -279,6 +298,65 @@ function LinkPopover({ nodeId }: { nodeId: NodeId }) {
         </button>
         <button className="btn btn-primary" onClick={save}>
           保存
+        </button>
+      </div>
+    </PopoverFrame>
+  );
+}
+
+/** Due date: pick from the calendar; applied immediately. */
+function DuePopover({ nodeId }: { nodeId: NodeId }) {
+  const due = useEditorStore((s) => s.doc!.nodes[nodeId].dueDate ?? '');
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      ref.current?.showPicker();
+    } catch {
+      /* showPicker needs a user gesture / may be unsupported: the input is still usable */
+    }
+  }, []);
+
+  const setDue = (dueDate: string | undefined) => useEditorStore.getState().setAttributes(nodeId, { dueDate });
+
+  return (
+    <PopoverFrame
+      nodeId={nodeId}
+      width={300}
+      onClose={closePopover}
+      title={
+        <>
+          <CalendarIcon size={14} /> 期日{due && <span className="due-current">（{formatDue(due)}まで）</span>}
+        </>
+      }
+    >
+      <input
+        ref={ref}
+        type="date"
+        className="link-input"
+        aria-label="期日"
+        autoFocus
+        value={due}
+        onChange={(e) => setDue(e.target.value || undefined)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' || e.key === 'Enter') closePopover();
+        }}
+      />
+      <div className="popover-actions">
+        {due && (
+          <button
+            className="btn danger-text"
+            onClick={() => {
+              setDue(undefined);
+              closePopover();
+            }}
+          >
+            期日を削除
+          </button>
+        )}
+        <span className="popover-hint" />
+        <button className="btn" onClick={closePopover}>
+          閉じる
         </button>
       </div>
     </PopoverFrame>

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as tree from '../model/tree';
-import type { MindMapDoc, MindNode, NodeId, Side } from '../model/types';
+import type { DisplayStatus, MindMapDoc, NodeId, Side } from '../model/types';
 
 const HISTORY_LIMIT = 200;
 
@@ -27,20 +27,32 @@ interface EditorState {
   setSide: (id: NodeId, side: Side) => void;
   setTitle: (title: string) => void;
   setTitleDraft: (draft: string | null) => void;
-  setAttributes: (id: NodeId, attrs: Partial<Pick<MindNode, 'status' | 'note' | 'link'>>) => void;
+  /**
+   * `coalesce`: consecutive changes with the same key (e.g. memo auto-saves while typing)
+   * are merged into a single undo step.
+   */
+  setAttributes: (id: NodeId, attrs: Partial<tree.NodeAttributes>, options?: { coalesce?: string }) => void;
+  setStatus: (id: NodeId, status: DisplayStatus) => void;
+  toggleBold: (id?: NodeId) => void;
+  /** Ends the current coalescing group (e.g. when the memo popup closes). */
+  endCoalesce: () => void;
 
   undo: () => void;
   redo: () => void;
 }
 
 export const useEditorStore = create<EditorState>()((set, get) => {
+  let coalesceKey: string | null = null;
+
   /** Applies a document change and records it in history (no-op if nothing changed). */
-  const commit = (next: MindMapDoc, patch: Partial<EditorState> = {}) => {
+  const commit = (next: MindMapDoc, patch: Partial<EditorState> = {}, coalesce?: string) => {
     const { doc, past } = get();
     if (!doc || next === doc) return set(patch);
+    const merge = !!coalesce && coalesce === coalesceKey && past.length > 0;
+    coalesceKey = coalesce ?? null;
     set({
       doc: { ...next, updatedAt: Date.now() },
-      past: [...past, doc].slice(-HISTORY_LIMIT),
+      past: merge ? past : [...past, doc].slice(-HISTORY_LIMIT),
       future: [],
       ...patch,
     });
@@ -50,6 +62,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
 
   const restore = (doc: MindMapDoc, past: MindMapDoc[], future: MindMapDoc[]) => {
     const { selectedId } = get();
+    coalesceKey = null;
     set({
       doc: { ...doc, updatedAt: Date.now() },
       past,
@@ -68,8 +81,10 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     past: [],
     future: [],
 
-    load: (doc) =>
-      set({ doc, selectedId: doc?.rootId ?? null, editingId: null, titleDraft: null, past: [], future: [] }),
+    load: (doc) => {
+      coalesceKey = null;
+      set({ doc, selectedId: doc?.rootId ?? null, editingId: null, titleDraft: null, past: [], future: [] });
+    },
     select: (selectedId) => set({ selectedId, editingId: null }),
     startEditing: (id) => {
       const t = target(id);
@@ -123,9 +138,21 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       if (doc) commit(tree.setTitle(doc, title), { titleDraft: null });
     },
     setTitleDraft: (titleDraft) => set({ titleDraft }),
-    setAttributes: (id, attrs) => {
+    setAttributes: (id, attrs, options) => {
       const { doc } = get();
-      if (doc) commit(tree.setAttributes(doc, id, attrs));
+      if (doc) commit(tree.setAttributes(doc, id, attrs), {}, options?.coalesce);
+    },
+    setStatus: (id, status) => {
+      const { doc } = get();
+      if (doc && id !== doc.rootId) commit(tree.setStatus(doc, id, status));
+    },
+    toggleBold: (id) => {
+      const { doc } = get();
+      const t = target(id);
+      if (doc && t && doc.nodes[t]) commit(tree.setAttributes(doc, t, { bold: !doc.nodes[t].bold }));
+    },
+    endCoalesce: () => {
+      coalesceKey = null;
     },
 
     undo: () => {

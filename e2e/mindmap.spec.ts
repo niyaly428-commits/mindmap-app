@@ -1,14 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-
-const topic = (page: Page, text: string) => page.locator('.topic', { hasText: new RegExp(`^${text}$`) });
-
-async function typeTopic(page: Page, text: string) {
-  const editor = page.locator('.topic-editor');
-  await expect(editor).toBeFocused();
-  await editor.fill(text);
-  await editor.press('Enter');
-  await expect(editor).toHaveCount(0);
-}
+import { expect, test } from '@playwright/test';
+import { chooseStatus, statusOf, topic, typeTopic } from './helpers';
 
 test('create, edit, check, undo, persist, rename and delete a map', async ({ page }) => {
   await page.goto('/');
@@ -26,14 +17,14 @@ test('create, edit, check, undo, persist, rename and delete a map', async ({ pag
 
   // Space toggles the selected topic; all children checked -> parent checked.
   await page.keyboard.press('Space');
-  const check = (t: string) => topic(page, t).locator('input[type=checkbox]');
+  const check = (t: string) => statusOf(page, t);
   await expect(check('サブ2')).toBeChecked();
   await expect(check('メイン1')).not.toBeChecked();
-  await check('サブ1').click();
+  await chooseStatus(page, 'サブ1', '完了');
   await expect(check('メイン1')).toBeChecked();
 
-  // Unchecking the parent unchecks all children.
-  await check('メイン1').click();
+  // Un-completing the parent un-completes all children.
+  await chooseStatus(page, 'メイン1', '未着手');
   await expect(check('サブ1')).not.toBeChecked();
   await expect(check('サブ2')).not.toBeChecked();
 

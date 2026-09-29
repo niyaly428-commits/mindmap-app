@@ -71,15 +71,36 @@ describe('editorStore', () => {
     expect(s().doc!.nodes[s().doc!.rootId].text).toBe('t');
   });
 
-  it('status / memo / link changes are undoable', () => {
+  it('status / memo / link / due date / style changes are undoable', () => {
     s().addChild();
     const id = s().selectedId!;
-    s().setAttributes(id, { status: 'waiting', note: 'n' });
-    expect(s().doc!.nodes[id]).toMatchObject({ status: 'waiting', note: 'n' });
+    s().setStatus(id, 'waiting');
+    s().setAttributes(id, { note: 'n', dueDate: '2026-10-03', textColor: 'blue' });
+    s().toggleBold(id);
+    expect(s().doc!.nodes[id]).toMatchObject({ status: 'waiting', note: 'n', dueDate: '2026-10-03', bold: true });
+    s().undo();
+    expect(s().doc!.nodes[id].bold).toBeUndefined();
+    s().undo();
+    expect(s().doc!.nodes[id].note).toBeUndefined();
     s().undo();
     expect(s().doc!.nodes[id].status).toBeUndefined();
     s().redo();
-    expect(s().doc!.nodes[id].note).toBe('n');
+    expect(s().doc!.nodes[id].status).toBe('waiting');
+  });
+
+  it('memo auto-saves while typing are merged into one undo step', () => {
+    s().addChild();
+    const id = s().selectedId!;
+    const before = s().past.length;
+    for (const note of ['a', 'ab', 'abc']) s().setAttributes(id, { note }, { coalesce: `note:${id}` });
+    expect(s().past.length).toBe(before + 1);
+    s().endCoalesce();
+    s().setAttributes(id, { note: 'abcd' }, { coalesce: `note:${id}` });
+    expect(s().past.length).toBe(before + 2);
+    s().undo();
+    expect(s().doc!.nodes[id].note).toBe('abc');
+    s().undo();
+    expect(s().doc!.nodes[id].note).toBeUndefined();
   });
 
   it('toggles checked on the selected node', () => {

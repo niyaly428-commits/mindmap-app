@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createNextDayMap, nextDayTitle } from './nextDay';
-import { addChild, createMap, setAttributes, toggleChecked } from './tree';
+import { addChild, createMap, setAttributes, setStatus, toggleChecked } from './tree';
 import type { MindMapDoc } from './types';
 
 const sep29 = new Date(2026, 8, 29);
@@ -43,13 +43,22 @@ describe('createNextDayMap', () => {
     };
     const gaichu = add(doc.rootId, '外注');
     const a = add(gaichu, 'A');
-    add(gaichu, 'B');
+    const bId = add(gaichu, 'B');
     const c = add(gaichu, 'C');
     const done = add(doc.rootId, '完了');
     add(done, 'D');
     doc = toggleChecked(toggleChecked(doc, a), c);
     doc = toggleChecked(doc, done);
-    doc = setAttributes(doc, gaichu, { status: 'waiting', note: 'メモ https://example.com', link: 'https://example.com' });
+    doc = setStatus(doc, gaichu, 'waiting');
+    doc = setAttributes(doc, gaichu, {
+      note: 'メモ https://example.com',
+      link: 'https://example.com',
+      dueDate: '2026-10-03',
+      bold: true,
+      textColor: 'red',
+    });
+    doc = setStatus(doc, bId, 'doing');
+    doc = setAttributes(doc, bId, { textColor: 'orange', dueDate: '2026-09-30' });
     return doc;
   }
 
@@ -62,8 +71,18 @@ describe('createNextDayMap', () => {
     expect(root.children).toHaveLength(1);
 
     const gaichu = next.nodes[root.children[0]];
-    expect(gaichu).toMatchObject({ text: '外注', checked: false, status: 'waiting', link: 'https://example.com' });
+    expect(gaichu).toMatchObject({
+      text: '外注',
+      checked: false,
+      status: 'waiting',
+      link: 'https://example.com',
+      dueDate: '2026-10-03',
+      bold: true,
+      textColor: 'red',
+    });
     expect(gaichu.note).toContain('メモ');
+    const b = next.nodes[gaichu.children[1]];
+    expect(b).toMatchObject({ text: 'B', status: 'doing', textColor: 'orange', dueDate: '2026-09-30' });
     expect(gaichu.children.map((id) => [next.nodes[id].text, next.nodes[id].checked])).toEqual([
       ['A', true],
       ['B', false],

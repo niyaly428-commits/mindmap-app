@@ -47,6 +47,7 @@ export function useKeyboardShortcuts() {
 
       if (mod && key.toLowerCase() === 'z') return e.preventDefault(), e.shiftKey ? s.redo() : s.undo();
       if (mod && key.toLowerCase() === 'y') return e.preventDefault(), s.redo();
+      if (mod && key.toLowerCase() === 'b') return e.preventDefault(), s.toggleBold();
       if (mod || e.altKey || !s.selectedId) return;
 
       const id = s.selectedId;

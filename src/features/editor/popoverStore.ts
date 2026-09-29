@@ -3,10 +3,11 @@ import type { NodeId } from '../../model/types';
 
 export type Popover =
   | { kind: 'menu'; nodeId: NodeId; x: number; y: number }
-  | { kind: 'note'; nodeId: NodeId; mode: 'view' | 'edit' }
-  | { kind: 'link'; nodeId: NodeId };
+  | { kind: 'note'; nodeId: NodeId }
+  | { kind: 'link'; nodeId: NodeId }
+  | { kind: 'due'; nodeId: NodeId };
 
-/** Context menu / memo / link popups (UI-only state, not saved). */
+/** Context menu / memo / link / due date popups (UI-only state, not saved). */
 export const usePopoverStore = create<{ popover: Popover | null }>()(() => ({ popover: null }));
 
 export const openPopover = (popover: Popover) => usePopoverStore.setState({ popover });

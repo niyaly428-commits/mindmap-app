@@ -4,6 +4,8 @@ import {
   addSibling,
   canMove,
   createMap,
+  displayStatus,
+  setStatus,
   moveNode,
   removeNode,
   setAttributes,
@@ -59,13 +61,14 @@ describe('tree operations', () => {
     expect(syncRootWithTitle(doc)).toBe(doc);
   });
 
-  it('sets and clears optional attributes (status / note / link)', () => {
+  it('sets and clears optional attributes (note / link / due date / bold / color)', () => {
     const { doc, a } = sample();
-    const next = setAttributes(doc, a, { status: 'doing', note: 'memo', link: 'https://x.dev' });
-    expect(next.nodes[a]).toMatchObject({ status: 'doing', note: 'memo', link: 'https://x.dev' });
-    expect(setAttributes(next, a, { status: 'doing' })).toBe(next);
-    const cleared = setAttributes(next, a, { status: undefined, note: '', link: undefined });
-    expect('status' in cleared.nodes[a] || 'note' in cleared.nodes[a] || 'link' in cleared.nodes[a]).toBe(false);
+    const attrs = { note: 'memo', link: 'https://x.dev', dueDate: '2026-10-03', bold: true, textColor: 'red' } as const;
+    const next = setAttributes(doc, a, attrs);
+    expect(next.nodes[a]).toMatchObject(attrs);
+    expect(setAttributes(next, a, { note: 'memo' })).toBe(next);
+    const cleared = setAttributes(next, a, { note: '', link: undefined, dueDate: undefined, bold: false, textColor: 'black' });
+    for (const k of Object.keys(attrs)) expect(k in cleared.nodes[a]).toBe(false);
   });
 
   it('adds children and balances main topics left/right', () => {
@@ -145,6 +148,62 @@ describe('checkbox propagation', () => {
     const r = addChild(all, a);
     expect(checked(r.doc, a)).toBe(false);
     expect(checked(removeNode(r.doc, r.id), a)).toBe(true);
+  });
+});
+
+describe('integrated status (未着手 / 進行中 / 待ち / 完了)', () => {
+  it('new tasks start as 未着手', () => {
+    const { doc, a1 } = sample();
+    expect(displayStatus(doc.nodes[a1])).toBe('todo');
+  });
+
+  it('完了 checks the task, other statuses uncheck it', () => {
+    const { doc, a1 } = sample();
+    const done = setStatus(doc, a1, 'done');
+    expect(done.nodes[a1].checked).toBe(true);
+    expect(displayStatus(done.nodes[a1])).toBe('done');
+    for (const s of ['doing', 'waiting', 'todo'] as const) {
+      const next = setStatus(done, a1, s);
+      expect(next.nodes[a1].checked).toBe(false);
+      expect(displayStatus(next.nodes[a1])).toBe(s);
+    }
+  });
+
+  it('進行中 / 待ち change only the task itself', () => {
+    const { doc, a, a1, a2, a2x } = sample();
+    const next = setStatus(setStatus(doc, a, 'doing'), a2, 'waiting');
+    expect(displayStatus(next.nodes[a])).toBe('doing');
+    expect(displayStatus(next.nodes[a2])).toBe('waiting');
+    for (const id of [a1, a2x]) expect(displayStatus(next.nodes[id])).toBe('todo');
+  });
+
+  it('all children 完了 -> parent 完了; parent 完了 -> descendants 完了', () => {
+    const { doc, a, a1, a2x } = sample();
+    let next = setStatus(doc, a, 'doing');
+    next = setStatus(setStatus(next, a1, 'done'), a2x, 'done');
+    expect(displayStatus(next.nodes[a])).toBe('done');
+  });
+
+  it('parent 完了 -> all descendants 完了 (siblings untouched)', () => {
+    const { doc, a, b, a1, a2, a2x } = sample();
+    const all = setStatus(setStatus(doc, a2x, 'doing'), a, 'done');
+    for (const id of [a, a1, a2, a2x]) expect(displayStatus(all.nodes[id])).toBe('done');
+    expect(displayStatus(all.nodes[b])).toBe('todo');
+  });
+
+  it('un-completing a parent (e.g. to 進行中) keeps the parent/child invariant', () => {
+    const { doc, a, a1, a2, a2x } = sample();
+    const next = setStatus(setStatus(doc, a, 'done'), a, 'doing');
+    expect(displayStatus(next.nodes[a])).toBe('doing');
+    for (const id of [a1, a2, a2x]) expect(displayStatus(next.nodes[id])).toBe('todo');
+  });
+
+  it('Space-style toggle: 未完了 -> 完了 -> 未着手', () => {
+    const { doc, a1 } = sample();
+    const doing = setStatus(doc, a1, 'waiting');
+    const done = toggleChecked(doing, a1);
+    expect(displayStatus(done.nodes[a1])).toBe('done');
+    expect(displayStatus(toggleChecked(done, a1).nodes[a1])).toBe('todo');
   });
 });
 

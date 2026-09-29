@@ -85,8 +85,9 @@ export function measureNode(text: string, depth: number, measure: TextMeasurer, 
   };
 }
 
+/** Extra inline items after the text, in icon widths (memo, link; the due date badge is ~3 icons wide). */
 export const iconCount = (node: MindMapDoc['nodes'][string]): number =>
-  (node.status ? 1 : 0) + (node.note ? 1 : 0) + (node.link ? 1 : 0);
+  (node.note ? 1 : 0) + (node.link ? 1 : 0) + (node.dueDate ? 3 : 0);
 
 /**
  * Two-sided mind map layout. Every subtree gets its own vertical band sized from the real

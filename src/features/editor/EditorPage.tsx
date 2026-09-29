@@ -6,6 +6,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useAutosave } from '../../store/autosave';
 import { MindMapCanvas } from './MindMapCanvas';
 import { Popovers } from './Popovers';
+import { TextStyleButtons } from './TopicNode';
 import { closePopover } from './popoverStore';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 
@@ -61,8 +62,10 @@ function Toolbar() {
   const canUndo = useEditorStore((s) => s.past.length > 0);
   const canRedo = useEditorStore((s) => s.future.length > 0);
   const selectedId = useEditorStore((s) => s.selectedId);
+  const selectedNode = useEditorStore((s) => (s.selectedId ? s.doc?.nodes[s.selectedId] : undefined));
   const titleDraft = useEditorStore((s) => s.titleDraft);
-  const { undo, redo, addChild, addSibling, deleteNode, setTitle, setTitleDraft } = useEditorStore.getState();
+  const { undo, redo, addChild, addSibling, deleteNode, setTitle, setTitleDraft, toggleBold, setAttributes } =
+    useEditorStore.getState();
 
   // The title is shared with the root topic: typing here shows up there immediately (and vice versa).
   const commitTitle = () => {
@@ -108,6 +111,15 @@ function Toolbar() {
           削除
         </button>
       </div>
+      <div className="toolbar-group text-style-group" aria-label="文字の装飾">
+        <TextStyleButtons
+          bold={!!selectedNode?.bold}
+          textColor={selectedNode?.textColor}
+          disabled={!selectedNode}
+          onBold={() => toggleBold()}
+          onColor={(c) => selectedId && setAttributes(selectedId, { textColor: c })}
+        />
+      </div>
       <div className="toolbar-group">
         <button className="btn" onMouseDown={noFocus} onClick={undo} disabled={!canUndo} title="元に戻す (Ctrl+Z)">
           ↶ 元に戻す
@@ -124,8 +136,8 @@ function Toolbar() {
 function ShortcutHelp() {
   return (
     <div className="shortcut-help">
-      <b>Tab</b> 子を追加 <b>Enter</b> 兄弟を追加 <b>F2</b>/ダブルクリック 編集 <b>Space</b> チェック <b>Delete</b> 削除{' '}
-      <b>矢印</b> 移動 <b>Ctrl+Z</b>/<b>Ctrl+Y</b> 元に戻す/やり直す <b>右クリック</b> メモ・リンク・ステータス ・
+      <b>Tab</b> 子を追加 <b>Enter</b> 兄弟を追加 <b>F2</b>/ダブルクリック 編集 <b>Space</b> 完了/未着手 <b>Ctrl+B</b> 太字 <b>Delete</b> 削除{' '}
+      <b>矢印</b> 移動 <b>Ctrl+Z</b>/<b>Ctrl+Y</b> 元に戻す/やり直す <b>右クリック</b> メモ・リンク・期日・ステータス ・
       ドラッグで他のトピックへ付け替え
     </div>
   );

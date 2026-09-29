@@ -244,7 +244,7 @@ button {
 .topic-main {
   padding: 7px 12px;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 22px;
   background: var(--branch);
   color: #fff;
@@ -273,33 +273,154 @@ button {
 .topic.is-checked .topic-text {
   opacity: 0.75;
 }
-.topic-check {
-  flex: none;
-  margin: 0;
-  cursor: pointer;
-  accent-color: var(--branch);
+
+/* Text decoration (bold / 4 colors) */
+.topic .is-bold {
+  font-weight: 800;
 }
-.topic-main .topic-check {
-  width: 16px;
-  height: 16px;
-  margin-top: 3px;
-  accent-color: #fff;
+.topic .text-red {
+  color: #e03131;
 }
-.topic-sub .topic-check {
-  width: 14px;
-  height: 14px;
-  margin-top: 2.5px;
+.topic .text-blue {
+  color: #1c64d6;
 }
+.topic .text-orange {
+  color: #e8590c;
+}
+/* Filled main topics: colored text sits on a white chip so it stays readable. */
+.topic-main .has-color {
+  color: #1f2328;
+  background: #fff;
+  border-radius: 4px;
+  padding: 0 5px;
+}
+.topic-main .has-color.text-red {
+  color: #e03131;
+}
+.topic-main .has-color.text-blue {
+  color: #1c64d6;
+}
+.topic-main .has-color.text-orange {
+  color: #e8590c;
+}
+
+/* Status (also the completion checkbox) */
 .topic-status {
   flex: none;
   display: inline-flex;
-  margin-top: 2px;
+  margin: 1px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
 }
 .topic-main .topic-status {
   margin-top: 3px;
 }
-.topic-root .topic-status {
-  margin-top: 6px;
+.topic-status:hover {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--branch) 40%, transparent);
+}
+.status-picker {
+  min-width: 120px;
+}
+
+/* Due date: red ring around the topic (box-shadow keeps layout sizes unchanged) + date badge.
+   `.due-today` / `.due-overdue` classes are already set for future highlighting. */
+.topic.has-due {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #e5484d;
+}
+.topic.has-due.is-selected {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #e5484d,
+    0 0 0 7px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.topic-due {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 1px;
+  padding: 0 6px;
+  height: 18px;
+  font: 600 11px/18px system-ui, sans-serif;
+  color: #d9303a;
+  background: #fff;
+  border: 1px solid #f3b4b7;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.topic-main .topic-due {
+  margin-top: 2px;
+}
+.topic-root .topic-due {
+  margin-top: 5px;
+}
+.topic-due:hover {
+  border-color: #e5484d;
+}
+
+/* Mini toolbar while editing a topic */
+.react-flow__node:has(.topic-editor) {
+  z-index: 1000 !important;
+}
+.edit-toolbar {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  cursor: default;
+}
+.style-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.style-btn:hover:not(:disabled) {
+  background: #f1efe8;
+}
+.style-btn.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+}
+.style-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.bold-btn {
+  font-weight: 800;
+  font-size: 14px;
+}
+.color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+.text-style-group {
+  padding: 0 4px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.topic {
+  position: relative;
 }
 .topic-icon {
   flex: none;
@@ -418,6 +539,41 @@ button {
   gap: 6px;
   font-weight: 600;
   color: var(--muted);
+}
+.popover-close {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.popover-close:hover {
+  background: #e9e7e0;
+  color: var(--text);
+}
+.due-current {
+  color: #d9303a;
+}
+.note-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.note-links a {
+  display: inline-flex;
+  gap: 4px;
+  align-items: flex-start;
+}
+.note-links svg {
+  flex: none;
+  margin-top: 2px;
 }
 .note-view {
   white-space: pre-wrap;

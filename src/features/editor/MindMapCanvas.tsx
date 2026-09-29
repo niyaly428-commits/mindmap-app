@@ -12,7 +12,7 @@ import {
   type XYPosition,
 } from '@xyflow/react';
 import { useEditorStore } from '../../store/editorStore';
-import { descendantIds } from '../../model/tree';
+import { descendantIds, displayStatus } from '../../model/tree';
 import { defaultMeasurer, iconCount, layoutMap, maxNodeWidth, type NodeBox, type Size } from '../../model/layout';
 import type { MindMapDoc, NodeId } from '../../model/types';
 import { TopicNode, type TopicNodeType } from './TopicNode';
@@ -41,13 +41,15 @@ function toFlow(
       measured: sizes.get(box.id),
       data: {
         text: node.text,
-        checked: node.checked,
         depth: box.depth,
         color,
         maxWidth: maxNodeWidth(box.depth, iconCount(node)),
-        status: node.status,
+        status: displayStatus(node),
         hasNote: !!node.note,
         link: node.link,
+        dueDate: node.dueDate,
+        bold: node.bold,
+        textColor: node.textColor,
       },
     });
     if (node.parentId) {
