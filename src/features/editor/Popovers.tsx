@@ -21,7 +21,7 @@ export function Popovers() {
     case 'link':
       return <LinkPopover key={popover.nodeId} nodeId={popover.nodeId} />;
     case 'due':
-      return <DuePopover key={popover.nodeId} nodeId={popover.nodeId} />;
+      return <DuePopover key={`${popover.nodeId}:${popover.nodeIds?.join(',') ?? ''}`} nodeId={popover.nodeId} nodeIds={popover.nodeIds} />;
   }
 }
 
@@ -94,7 +94,7 @@ function ContextMenu({ nodeId, nodeIds = [nodeId], x, y }: { nodeId: NodeId; nod
         <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'link', nodeId })}>
           <LinkIcon /> リンク
         </button>
-        <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'due', nodeId })}>
+        <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'due', nodeId, nodeIds })}>
           <CalendarIcon size={14} /> 期日
         </button>
         {!isRoot && <button role="menuitemcheckbox" aria-checked={routine} className="menu-item" onClick={() => { const store = useEditorStore.getState(); if (multiple) store.bulkSetRoutine(!routine); else store.setAttributes(nodeId, { routine: !routine }); closePopover(); }}>{routine ? '✓ ' : ''}{multiple ? `${nodeIds.length}件に` : ''}ルーティンタスク</button>}
@@ -310,8 +310,11 @@ function LinkPopover({ nodeId }: { nodeId: NodeId }) {
 }
 
 /** Due date: pick from the calendar; applied immediately. */
-function DuePopover({ nodeId }: { nodeId: NodeId }) {
-  const due = useEditorStore((s) => s.doc!.nodes[nodeId].dueDate ?? '');
+function DuePopover({ nodeId, nodeIds = [nodeId] }: { nodeId: NodeId; nodeIds?: NodeId[] }) {
+  const due = useEditorStore((s) => {
+    const values = nodeIds.map((id) => s.doc!.nodes[id]?.dueDate ?? '');
+    return values.every((value) => value === values[0]) ? values[0] : '';
+  });
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -322,7 +325,11 @@ function DuePopover({ nodeId }: { nodeId: NodeId }) {
     }
   }, []);
 
-  const setDue = (dueDate: string | undefined) => useEditorStore.getState().setAttributes(nodeId, { dueDate });
+  const setDue = (dueDate: string | undefined) => {
+    const store = useEditorStore.getState();
+    if (nodeIds.length > 1) store.bulkSetDueDate(dueDate);
+    else store.setAttributes(nodeId, { dueDate });
+  };
 
   return (
     <PopoverFrame

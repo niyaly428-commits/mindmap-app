@@ -57,6 +57,7 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
   useEffect(() => { if (!preview) return; const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setPreview(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [preview]);
 
   const level = data.depth === 0 ? 'root' : data.depth === 1 ? 'main' : 'sub';
+  const due = data.dueDate ? dueState(data.dueDate) : null;
   const className = [
     'topic',
     `topic-${level}`,
@@ -64,7 +65,8 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
     isDropTarget && 'is-drop-target',
     isDragging && 'is-dragging',
     data.status === 'done' && 'is-checked',
-    data.dueDate && `has-due due-${dueState(data.dueDate)}`,
+    data.dueDate && due !== 'upcoming' && 'has-due',
+    due && `due-${due}`,
     data.routine && 'is-routine',
     selectedMany && 'is-multi-selected',
   ]

@@ -1,17 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { dueState, formatDue, toISODate } from './date';
 
-const today = new Date(2026, 8, 29);
+const today = new Date(2026, 8, 30, 12);
 
 describe('due date helpers', () => {
   it('formats local dates', () => {
     expect(toISODate(new Date(2026, 9, 3))).toBe('2026-10-03');
     expect(formatDue('2026-10-03', today)).toBe('10/3');
     expect(formatDue('2027-01-05', today)).toBe('2027/1/5');
+    expect(formatDue('2026/10/07', today)).toBe('10/7');
   });
-  it('classifies due dates relative to today', () => {
-    expect(dueState('2026-09-28', today)).toBe('overdue');
-    expect(dueState('2026-09-29', today)).toBe('today');
-    expect(dueState('2026-10-01', today)).toBe('upcoming');
+  it('classifies calendar-day distance without local-time or timezone drift', () => {
+    expect(dueState('2026-09-29', today)).toBe('overdue');
+    expect(dueState('2026-09-30', new Date(2026, 8, 30, 23, 59))).toBe('today');
+    expect(dueState('2026-10-01', new Date(2026, 8, 30))).toBe('soon');
+    expect(dueState('2026-10-07', new Date(2026, 8, 30))).toBe('soon');
+    expect(dueState('2026-10-08', new Date(2026, 8, 30))).toBe('month');
+    expect(dueState('2026/10/20', new Date(2026, 8, 30, 23, 59))).toBe('month');
+    expect(dueState('2026-10-30', new Date(2026, 8, 30))).toBe('month');
+    expect(dueState('2026-10-31', new Date(2026, 8, 30))).toBe('upcoming');
+    expect(dueState('2027-02-27', new Date(2026, 8, 30))).toBe('upcoming');
+    expect(dueState('2027/02/27', new Date(2026, 8, 30))).toBe('upcoming');
+    expect(dueState('2027-01-01', new Date(2026, 11, 31, 23, 59))).toBe('soon');
+    expect(dueState('2027/01/30', new Date(2026, 11, 31))).toBe('month');
+    expect(dueState('2027/01/31', new Date(2026, 11, 31))).toBe('upcoming');
   });
 });

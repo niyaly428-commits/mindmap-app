@@ -67,7 +67,9 @@ function copySubtree(src: Record<NodeId, MindNode>, id: NodeId, parentId: NodeId
   const newId = createId();
   const includedChildren = keepWholeBranch ? src[id].children : src[id].children.filter((child) => hasRoutine(src, child));
   const children = includedChildren.map((c) => copySubtree(src, c, newId, out, keepWholeBranch || !!src[c].routine));
-  out[newId] = { ...src[id], id: newId, parentId, children };
+  const copied = { ...src[id] };
+  delete copied.position;
+  out[newId] = { ...copied, id: newId, parentId, children };
   return newId;
 }
 

@@ -25,7 +25,7 @@ export interface MindNode {
   children: NodeId[];
   /** Completed ("完了"). Parent/child propagation works on this flag. */
   checked: boolean;
-  /** Only meaningful for direct children of the root. */
+  /** Direction from the parent; root children define main branches, descendants may branch either way. */
   side?: Side;
   collapsed?: boolean;
   /** Only meaningful while not checked; cleared when the task is completed. */

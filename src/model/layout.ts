@@ -1,4 +1,5 @@
 import type { DesignPreset, MindMapDoc, NodeId, Side } from './types';
+import { descendantIds } from './tree';
 
 export interface NodeBox {
   id: NodeId;
@@ -100,6 +101,8 @@ export function layoutMap(
   const subtree = new Map<NodeId, number>();
 
   const visibleChildren = (id: NodeId) => (doc.nodes[id].collapsed ? [] : doc.nodes[id].children);
+  const childrenOnSide = (id: NodeId, inheritedSide: Side, side: Side) =>
+    visibleChildren(id).filter((child) => (doc.nodes[child].side ?? inheritedSide) === side);
   // Keep sibling connector lanes separate, including the vertical bands occupied by
   // each sibling's descendants. Structured presets need room for clear orthogonal turns.
   const gapFor = (depth: number) => preset === 'soft-organic' ? (depth === 1 ? 34 : 14) : preset === 'clean-structured' ? (depth === 1 ? 28 : 18) : (depth === 1 ? 30 : 16);
@@ -114,38 +117,43 @@ export function layoutMap(
     return s;
   };
 
-  const stackHeight = (ids: NodeId[], depth: number) =>
-    ids.reduce((sum, c) => sum + subtreeHeight(c, depth), 0) + Math.max(0, ids.length - 1) * gapFor(depth);
+  const stackHeight = (ids: NodeId[], depth: number, side: Side) =>
+    ids.reduce((sum, c) => sum + subtreeHeight(c, depth, side), 0) + Math.max(0, ids.length - 1) * gapFor(depth);
 
-  function subtreeHeight(id: NodeId, depth: number): number {
+  function subtreeHeight(id: NodeId, depth: number, inheritedSide: Side): number {
     const cached = subtree.get(id);
     if (cached !== undefined) return cached;
-    const h = Math.max(sizeOf(id, depth).height, stackHeight(visibleChildren(id), depth + 1));
+    const nodeSide = doc.nodes[id].side ?? inheritedSide;
+    const leftHeight = stackHeight(childrenOnSide(id, nodeSide, 'left'), depth + 1, 'left');
+    const rightHeight = stackHeight(childrenOnSide(id, nodeSide, 'right'), depth + 1, 'right');
+    const h = Math.max(sizeOf(id, depth).height, leftHeight, rightHeight);
     subtree.set(id, h);
     return h;
   }
 
   function place(id: NodeId, anchorX: number, top: number, side: Side, depth: number, branch: number) {
     const { width, height } = sizeOf(id, depth);
-    const centerY = top + subtreeHeight(id, depth) / 2;
+    const centerY = top + subtreeHeight(id, depth, side) / 2;
     const baseGap = preset === 'soft-organic' ? (depth === 1 ? 84 : 48) : preset === 'clean-structured' ? (depth === 1 ? 62 : 48) : (depth === 1 ? 66 : 52);
     // Reserve a vertical routing bus between each parent and its children.
     const routeGap = preset === 'soft-organic' ? 0 : 32;
     const gap = Math.max(baseGap, routeGap);
     const x = side === 'right' ? anchorX + gap : anchorX - gap - width;
     boxes.set(id, { id, x, y: centerY - height / 2, width, height, depth, side, branch });
-    placeStack(visibleChildren(id), side === 'right' ? x + width : x, centerY, side, depth + 1, branch);
+    placeStack(childrenOnSide(id, side, 'right'), x + width, centerY, 'right', depth + 1, branch);
+    placeStack(childrenOnSide(id, side, 'left'), x, centerY, 'left', depth + 1, branch);
   }
 
   function placeStack(ids: NodeId[], anchorX: number, centerY: number, side: Side, depth: number, branch: number) {
-    let top = centerY - stackHeight(ids, depth) / 2;
+    let top = centerY - stackHeight(ids, depth, side) / 2;
     for (const c of ids) {
       place(c, anchorX, top, side, depth, branch < 0 ? root.children.indexOf(c) : branch);
-      top += subtreeHeight(c, depth) + gapFor(depth);
+      top += subtreeHeight(c, depth, side) + gapFor(depth);
     }
   }
 
   const root = doc.nodes[doc.rootId];
+  const naturalPositions = new Map<NodeId, { x: number; y: number }>();
   const rootSize = sizeOf(root.id, 0);
   boxes.set(root.id, {
     id: root.id,
@@ -162,13 +170,86 @@ export function layoutMap(
     placeStack(right, rootSize.width / 2, 0, 'right', 1, -1);
     placeStack(left, -rootSize.width / 2, 0, 'left', 1, -1);
   }
-  // Preserve positions produced by a completed React Flow drag. Descendants are
-  // stored too, so moving a branch keeps its internal geometry intact.
-  for (const node of Object.values(doc.nodes)) {
+  for (const [id, box] of boxes) naturalPositions.set(id, { x: box.x, y: box.y });
+  const manualNodes = Object.values(doc.nodes)
+    .filter((node) => node.position && boxes.has(node.id))
+    .sort((a, b) => boxes.get(a.id)!.depth - boxes.get(b.id)!.depth);
+  const translateUnplacedDescendants = (id: NodeId, dx: number, dy: number) => {
+    for (const childId of visibleChildren(id)) {
+      if (doc.nodes[childId].position) continue;
+      const child = boxes.get(childId);
+      if (child) boxes.set(childId, { ...child, x: child.x + dx, y: child.y + dy });
+      translateUnplacedDescendants(childId, dx, dy);
+    }
+  };
+  // A moved node is an anchor. Shift any auto-laid descendants with it, while
+  // keeping separately placed descendants anchored at their own saved positions.
+  for (const node of manualNodes) {
     if (node.position && boxes.has(node.id)) {
       const box = boxes.get(node.id)!;
+      const natural = naturalPositions.get(node.id)!;
+      const dx = node.position.x - natural.x;
+      const dy = node.position.y - natural.y;
       boxes.set(node.id, { ...box, x: node.position.x, y: node.position.y });
+      if (dx !== 0 || dy !== 0) translateUnplacedDescendants(node.id, dx, dy);
     }
+  }
+
+  // A free drag can place a node over a different branch. Keep that placement
+  // as the anchor, then move the smallest non-root subtree out of the way.
+  // Repeating this after every layout pass makes the result deterministic while
+  // keeping parent/child subtrees together and avoiding box intersections.
+  const intersects = (a: NodeBox, b: NodeBox) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  const isAncestor = (ancestor: NodeId, child: NodeId) => {
+    let parent = doc.nodes[child].parentId;
+    while (parent) {
+      if (parent === ancestor) return true;
+      parent = doc.nodes[parent]?.parentId ?? null;
+    }
+    return false;
+  };
+  const ids = [...boxes.keys()];
+  const subtreeMembers = new Map(ids.map((id) => [id, [id, ...descendantIds(doc.nodes, id)]]));
+  const shiftSubtree = (id: NodeId, deltaY: number) => {
+    for (const currentId of subtreeMembers.get(id) ?? [id]) {
+      const box = boxes.get(currentId);
+      if (box) boxes.set(currentId, { ...box, y: box.y + deltaY });
+    }
+  };
+  for (let pass = 0; pass < ids.length * 2; pass++) {
+    let moved = false;
+    for (let i = 0; i < ids.length && !moved; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const aId = ids[i];
+        const bId = ids[j];
+        const a = boxes.get(aId)!;
+        const b = boxes.get(bId)!;
+        if (!intersects(a, b)) continue;
+
+        // If an ancestor was moved, preserve the child as the more precise anchor.
+        let targetId: NodeId;
+        let fixed: NodeBox;
+        if (isAncestor(aId, bId)) { targetId = bId; fixed = a; }
+        else if (isAncestor(bId, aId)) { targetId = aId; fixed = b; }
+        else if (aId === doc.rootId) { targetId = bId; fixed = a; }
+        else if (bId === doc.rootId) { targetId = aId; fixed = b; }
+        else if (!!doc.nodes[aId].position !== !!doc.nodes[bId].position) {
+          targetId = doc.nodes[aId].position ? bId : aId;
+          fixed = targetId === aId ? b : a;
+        } else {
+          // Stable tree order breaks ties when two explicitly placed nodes meet.
+          targetId = bId;
+          fixed = a;
+        }
+        const target = boxes.get(targetId)!;
+        const gap = preset === 'soft-organic' ? 14 : 18;
+        shiftSubtree(targetId, fixed.y + fixed.height + gap - target.y);
+        moved = true;
+        break;
+      }
+    }
+    if (!moved) break;
   }
   return boxes;
 }

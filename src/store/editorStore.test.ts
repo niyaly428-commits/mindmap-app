@@ -186,6 +186,24 @@ describe('editorStore', () => {
     expect(s().doc!.nodes[second].routine).toBe(true);
   });
 
+  it('applies one due date to all selected tasks in one undo and redo step without clearing selection', () => {
+    s().addChild(); const first = s().selectedId!;
+    s().addSibling(first); const second = s().selectedId!;
+    s().setSelection([first, second]);
+    const history = s().past.length;
+    s().bulkSetDueDate('2026-10-07');
+    expect(s().past).toHaveLength(history + 1);
+    expect(s().doc!.nodes[first].dueDate).toBe('2026-10-07');
+    expect(s().doc!.nodes[second].dueDate).toBe('2026-10-07');
+    expect(s().selectedIds).toEqual([first, second]);
+    s().undo();
+    expect(s().doc!.nodes[first].dueDate).toBeUndefined();
+    expect(s().doc!.nodes[second].dueDate).toBeUndefined();
+    s().redo();
+    expect(s().doc!.nodes[first].dueDate).toBe('2026-10-07');
+    expect(s().doc!.nodes[second].dueDate).toBe('2026-10-07');
+  });
+
   it('stores dragged positions as one undoable map change', () => {
     s().addChild(); const id = s().selectedId!;
     const history = s().past.length;
@@ -194,5 +212,31 @@ describe('editorStore', () => {
     expect(s().past).toHaveLength(history + 1);
     s().undo(); expect(s().doc!.nodes[id].position).toBeUndefined();
     s().redo(); expect(s().doc!.nodes[id].position).toEqual({ x: 120, y: -40 });
+  });
+
+  it('reflows descendants when a manually dragged node changes branch direction', () => {
+    s().addChild(); const parent = s().selectedId!;
+    s().addChild(parent); const child = s().selectedId!;
+    s().addChild(child); const grandchild = s().selectedId!;
+    s().setPositions({
+      [parent]: { x: 100, y: 0 },
+      [child]: { x: 250, y: 0 },
+      [grandchild]: { x: 400, y: 0 },
+    });
+    const history = s().past.length;
+    s().setPositions(
+      { [child]: { x: -250, y: 80 }, [grandchild]: { x: -100, y: 80 } },
+      { id: child, side: 'left' },
+    );
+    expect(s().doc!.nodes[child].side).toBe('left');
+    expect(s().doc!.nodes[child].position).toEqual({ x: -250, y: 80 });
+    expect(s().doc!.nodes[grandchild].position).toBeUndefined();
+    expect(s().past).toHaveLength(history + 1);
+    s().undo();
+    expect(s().doc!.nodes[child].side).toBeUndefined();
+    expect(s().doc!.nodes[grandchild].position).toEqual({ x: 400, y: 0 });
+    s().redo();
+    expect(s().doc!.nodes[child].side).toBe('left');
+    expect(s().doc!.nodes[grandchild].position).toBeUndefined();
   });
 });

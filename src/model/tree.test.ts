@@ -80,6 +80,48 @@ describe('tree operations', () => {
     expect(doc.nodes[a1].parentId).toBe(a);
   });
 
+  it('balances new root branches by existing subtree size', () => {
+    let doc = createMap('weighted');
+    const large = addChild(doc, doc.rootId, 'large'); doc = large.doc;
+    for (let i = 0; i < 6; i++) doc = addChild(doc, large.id, `child ${i}`).doc;
+    const small = addChild(doc, doc.rootId, 'small'); doc = small.doc;
+    expect(doc.nodes[large.id].side).toBe('right');
+    expect(doc.nodes[small.id].side).toBe('left');
+    const next = addChild(doc, doc.rootId, 'next');
+    expect(next.doc.nodes[next.id].side).toBe('left');
+  });
+
+  it('does not force a new root sibling to stay on an overloaded side', () => {
+    let doc = createMap('root siblings');
+    const right = addChild(doc, doc.rootId, 'Right'); doc = right.doc;
+    const left = addChild(doc, doc.rootId, 'Left'); doc = left.doc;
+    for (let i = 0; i < 6; i++) doc = addChild(doc, left.id, `left child ${i}`).doc;
+    expect(doc.nodes[right.id].side).toBe('right');
+    expect(doc.nodes[left.id].side).toBe('left');
+    const sibling = addSibling(doc, left.id);
+    expect(sibling.doc.nodes[sibling.id].parentId).toBe(doc.rootId);
+    expect(sibling.doc.nodes[sibling.id].side).toBe('right');
+  });
+
+  it('uses the occupied vertical span of manually placed branches in side selection', () => {
+    let doc = createMap('placed branches');
+    const right = addChild(doc, doc.rootId, 'Right'); doc = right.doc;
+    for (let i = 0; i < 5; i++) doc = addChild(doc, right.id, `right child ${i}`).doc;
+    const left = addChild(doc, doc.rootId, 'Left'); doc = left.doc;
+    const leftA = addChild(doc, left.id, 'left A'); doc = leftA.doc;
+    const leftB = addChild(doc, left.id, 'left B'); doc = leftB.doc;
+    doc = {
+      ...doc,
+      nodes: {
+        ...doc.nodes,
+        [leftA.id]: { ...doc.nodes[leftA.id], position: { x: -500, y: -900 } },
+        [leftB.id]: { ...doc.nodes[leftB.id], position: { x: -500, y: 900 } },
+      },
+    };
+    const next = addChild(doc, doc.rootId, 'Use the less occupied side');
+    expect(next.doc.nodes[next.id].side).toBe('right');
+  });
+
   it('adds a sibling right after the node, on the same side', () => {
     const { doc, root, a, b, a1, a2 } = sample();
     const r = addSibling(doc, a1);
@@ -217,6 +259,33 @@ describe('moving nodes', () => {
     expect(next.nodes[a2x].parentId).toBe(a2);
   });
 
+  it('keeps user placed positions when reparenting', () => {
+    const { doc, a, b, a1 } = sample();
+    const positioned = { ...doc, nodes: { ...doc.nodes, [a1]: { ...doc.nodes[a1], position: { x: -420, y: 85 } } } };
+    const next = moveNode(positioned, a1, b);
+    expect(next.nodes[a1].parentId).toBe(b);
+    expect(next.nodes[a1].position).toEqual({ x: -420, y: 85 });
+    expect(next.nodes[a].children).not.toContain(a1);
+  });
+
+  it('reflows descendants when a reparent changes the branch direction', () => {
+    const { doc, a, a2, a2x, b } = sample();
+    const positioned = {
+      ...doc,
+      nodes: {
+        ...doc.nodes,
+        [a2]: { ...doc.nodes[a2], position: { x: 400, y: 0 } },
+        [a2x]: { ...doc.nodes[a2x], position: { x: 560, y: 0 } },
+      },
+    };
+    const next = moveNode(positioned, a2, b, 'left', { [a2]: { x: -400, y: 30 }, [a2x]: { x: -560, y: 30 } });
+    expect(next.nodes[a2].parentId).toBe(b);
+    expect(next.nodes[a2].side).toBe('left');
+    expect(next.nodes[a2].position).toEqual({ x: -400, y: 30 });
+    expect(next.nodes[a2x].position).toBeUndefined();
+    expect(next.nodes[a].children).not.toContain(a2);
+  });
+
   it('rejects moving into itself or a descendant, or the root', () => {
     const { doc, root, a, a2x } = sample();
     expect(canMove(doc, a, a2x)).toBe(false);
@@ -243,6 +312,6 @@ describe('moving nodes', () => {
   it('switches side of a main topic', () => {
     const { doc, a, a1 } = sample();
     expect(setSide(doc, a, 'left').nodes[a].side).toBe('left');
-    expect(setSide(doc, a1, 'left')).toBe(doc);
+    expect(setSide(doc, a1, 'left').nodes[a1].side).toBe('left');
   });
 });

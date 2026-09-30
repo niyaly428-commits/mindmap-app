@@ -24,7 +24,7 @@ interface EditorState {
   deleteNode: (id?: NodeId) => void;
   toggleChecked: (id?: NodeId) => void;
   setText: (id: NodeId, text: string) => void;
-  moveNode: (id: NodeId, newParentId: NodeId, side?: Side) => void;
+  moveNode: (id: NodeId, newParentId: NodeId, side?: Side, positions?: Record<NodeId, { x: number; y: number }>) => void;
   setPositions: (positions: Record<NodeId, { x: number; y: number }>, sideChange?: { id: NodeId; side: Side }) => void;
   setSide: (id: NodeId, side: Side) => void;
   setDesignPreset: (value: DesignPreset) => void;
@@ -32,6 +32,7 @@ interface EditorState {
   setSelection: (ids: NodeId[]) => void;
   bulkSetColor: (value: TextColor) => void;
   bulkSetStatus: (value: DisplayStatus) => void;
+  bulkSetDueDate: (value: string | undefined) => void;
   bulkSetRoutine: (value: boolean) => void;
   bulkDelete: () => void;
   setTitle: (title: string) => void;
@@ -136,15 +137,22 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       const { doc } = get();
       if (doc) commit(tree.setText(doc, id, text));
     },
-    moveNode: (id, newParentId, side) => {
+    moveNode: (id, newParentId, side, positions) => {
       const { doc } = get();
-      if (doc) commit(tree.moveNode(doc, id, newParentId, side));
+      if (doc) commit(tree.moveNode(doc, id, newParentId, side, positions));
     },
     setPositions: (positions, sideChange) => {
       const { doc } = get(); if (!doc) return;
       const nodes = { ...doc.nodes }; let changed = false;
+      const directionChanged = !!sideChange && tree.sideOf(doc, sideChange.id) !== sideChange.side;
+      const reflowIds = directionChanged ? new Set(tree.descendantIds(doc.nodes, sideChange!.id)) : new Set<NodeId>();
       for (const [id, position] of Object.entries(positions)) {
-        const node = nodes[id]; if (node && (node.position?.x !== position.x || node.position?.y !== position.y)) { nodes[id] = { ...node, position }; changed = true; }
+        const node = nodes[id];
+        if (node && !reflowIds.has(id) && (node.position?.x !== position.x || node.position?.y !== position.y)) { nodes[id] = { ...node, position }; changed = true; }
+      }
+      for (const id of reflowIds) {
+        const node = nodes[id];
+        if (node?.position) { const { position: _position, ...rest } = node; nodes[id] = rest; changed = true; }
       }
       if (sideChange && nodes[sideChange.id]?.side !== sideChange.side) {
         nodes[sideChange.id] = { ...nodes[sideChange.id], side: sideChange.side };
@@ -165,6 +173,12 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     bulkSetStatus: (value) => {
       const { doc, selectedIds } = get(); if (!doc) return;
       let next = doc; for (const id of selectedIds.filter((id) => id !== doc.rootId)) next = tree.setStatus(next, id, value); commit(next);
+    },
+    bulkSetDueDate: (value) => {
+      const { doc, selectedIds } = get(); if (!doc) return;
+      let next = doc;
+      for (const id of selectedIds.filter((selected) => selected !== doc.rootId)) next = tree.setAttributes(next, id, { dueDate: value });
+      commit(next);
     },
     bulkSetRoutine: (value) => {
       const { doc, selectedIds } = get(); if (!doc) return;

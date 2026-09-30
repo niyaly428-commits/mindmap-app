@@ -373,17 +373,20 @@ button {
   min-width: 120px;
 }
 
-/* Due date: red ring around the topic (box-shadow keeps layout sizes unchanged) + date badge.
-   `.due-today` / `.due-overdue` classes are already set for future highlighting. */
+/* Due date urgency colors stay theme-neutral and do not affect measured layout. */
 .topic.has-due {
+  --due-color: #e5484d;
   box-shadow:
     0 0 0 2px #fff,
-    0 0 0 4px #e5484d;
+    0 0 0 4px var(--due-color);
 }
+.topic.due-soon { --due-color: #e8892e; }
+.topic.due-month { --due-color: #4387c8; }
+.topic.due-upcoming { --due-color: var(--branch); }
 .topic.has-due.is-selected {
   box-shadow:
     0 0 0 2px #fff,
-    0 0 0 4px #e5484d,
+    0 0 0 4px var(--due-color),
     0 0 0 7px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .topic-due {
@@ -395,9 +398,9 @@ button {
   padding: 0 6px;
   height: 18px;
   font: 600 11px/18px system-ui, sans-serif;
-  color: #d9303a;
+  color: var(--due-color, #d9303a);
   background: #fff;
-  border: 1px solid #f3b4b7;
+  border: 1px solid color-mix(in srgb, var(--due-color, #d9303a) 38%, white);
   border-radius: 9px;
   cursor: pointer;
   white-space: nowrap;
@@ -409,7 +412,7 @@ button {
   margin-top: 5px;
 }
 .topic-due:hover {
-  border-color: #e5484d;
+  border-color: var(--due-color, #e5484d);
 }
 
 /* Mini toolbar while editing a topic */

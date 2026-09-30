@@ -79,6 +79,72 @@ describe('layoutMap', () => {
     expect(layoutMap(doc, measure).size).toBe(2);
   });
 
+  it('keeps an explicit drag position and separates another colliding subtree', () => {
+    let doc = createMap();
+    const first = addChild(doc, doc.rootId, 'First'); doc = first.doc;
+    const second = addChild(doc, doc.rootId, 'Second'); doc = second.doc;
+    doc = {
+      ...doc,
+      nodes: {
+        ...doc.nodes,
+        [first.id]: { ...doc.nodes[first.id], position: { x: 420, y: 40 } },
+        [second.id]: { ...doc.nodes[second.id], position: { x: 420, y: 40 } },
+      },
+    };
+    const boxes = layoutMap(doc, measure);
+    expect(boxes.get(first.id)).toMatchObject({ x: 420, y: 40 });
+    expect(overlaps(boxes.get(first.id)!, boxes.get(second.id)!)).toBe(false);
+    const positions = [...boxes.values()];
+    for (let i = 0; i < positions.length; i++)
+      for (let j = i + 1; j < positions.length; j++) expect(overlaps(positions[i], positions[j])).toBe(false);
+  });
+
+  it.each(['soft-organic', 'clean-structured', 'soft-analytical'] as const)(
+    '%s keeps the parent on the root side while a dragged child branch extends left',
+    (preset) => {
+      let doc = createMap();
+      const parent = addChild(doc, doc.rootId, 'Parent'); doc = parent.doc;
+      const child = addChild(doc, parent.id, 'Dragged child'); doc = child.doc;
+      const grandchild = addChild(doc, child.id, 'Grandchild'); doc = grandchild.doc;
+      doc = {
+        ...doc,
+        nodes: {
+          ...doc.nodes,
+          [child.id]: { ...doc.nodes[child.id], side: 'left' },
+        },
+      };
+      const boxes = layoutMap(doc, measure, undefined, preset);
+      const rootBox = boxes.get(doc.rootId)!;
+      const parentBox = boxes.get(parent.id)!;
+      const childBox = boxes.get(child.id)!;
+      const grandchildBox = boxes.get(grandchild.id)!;
+      expect(parentBox.x).toBeGreaterThan(rootBox.x + rootBox.width);
+      expect(childBox.x + childBox.width).toBeLessThan(parentBox.x);
+      expect(grandchildBox.x + grandchildBox.width).toBeLessThan(childBox.x);
+      expect(doc.nodes[child.id].parentId).toBe(parent.id);
+      const all = [...boxes.values()];
+      for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) expect(overlaps(all[i], all[j])).toBe(false);
+    },
+  );
+
+  it('moves auto-laid descendants with a manually anchored branch after a side flip', () => {
+    let doc = createMap();
+    const parent = addChild(doc, doc.rootId, 'Parent'); doc = parent.doc;
+    const child = addChild(doc, parent.id, 'Child'); doc = child.doc;
+    const grandchild = addChild(doc, child.id, 'Grandchild'); doc = grandchild.doc;
+    doc = {
+      ...doc,
+      nodes: {
+        ...doc.nodes,
+        [child.id]: { ...doc.nodes[child.id], side: 'left', position: { x: -500, y: 120 } },
+      },
+    };
+    const boxes = layoutMap(doc, measure);
+    expect(boxes.get(child.id)).toMatchObject({ x: -500, y: 120 });
+    expect(boxes.get(grandchild.id)!.x + boxes.get(grandchild.id)!.width).toBeLessThan(boxes.get(child.id)!.x);
+    expect(boxes.get(parent.id)!.x).toBeGreaterThan(boxes.get(doc.rootId)!.x + boxes.get(doc.rootId)!.width);
+  });
+
   it.each(['clean-structured', 'soft-analytical'] as const)('%s keeps a deep multi-sibling layout readable', (preset) => {
     let doc = createMap();
     const main = addChild(doc, doc.rootId, 'main'); doc = main.doc;

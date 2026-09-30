@@ -54,8 +54,11 @@ export function branchOf(doc: MindMapDoc, id: NodeId): NodeId | null {
 }
 
 export function sideOf(doc: MindMapDoc, id: NodeId): Side | null {
-  const branch = branchOf(doc, id);
-  return branch ? (doc.nodes[branch].side ?? 'right') : null;
+  if (id === doc.rootId) return null;
+  const node = doc.nodes[id];
+  if (!node) return null;
+  if (node.side) return node.side;
+  return node.parentId ? (sideOf(doc, node.parentId) ?? 'right') : null;
 }
 
 /** Completing a task clears its in-progress status, so un-completing it returns to "未着手". */
@@ -79,10 +82,48 @@ function syncAncestors(nodes: Nodes, startId: NodeId | null): void {
 }
 
 function pickSide(nodes: Nodes, root: MindNode): Side {
-  let right = 0;
-  let left = 0;
-  for (const c of root.children) (nodes[c].side === 'left' ? left++ : right++);
-  return left < right ? 'left' : 'right';
+  const estimateNodeHeight = (id: NodeId, depth: number) => {
+    const node = nodes[id];
+    const maxTextWidth = 240 - (node.note ? 20 : 0) - (node.link ? 20 : 0) - (node.dueDate ? 60 : 0);
+    const textWidth = (line: string) => [...line].reduce((width, char) => width + (char.charCodeAt(0) > 0xff ? 14 : 7.5), 0);
+    const lines = (node.text || ' ').split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(textWidth(line || ' ') / Math.max(80, maxTextWidth))), 0);
+    return lines * (depth === 1 ? 22 : 19) + (depth === 1 ? 18 : 10);
+  };
+  type BranchStats = { height: number; count: number; placedTop: number; placedBottom: number };
+  const branchStats = (id: NodeId, depth: number, inheritedSide: Side): BranchStats => {
+    const node = nodes[id];
+    const height = estimateNodeHeight(id, depth);
+    const placedTop = node.position?.y ?? Number.POSITIVE_INFINITY;
+    const placedBottom = node.position ? node.position.y + height : Number.NEGATIVE_INFINITY;
+    const children = node.collapsed ? [] : node.children;
+    const stacks: Record<Side, BranchStats[]> = { left: [], right: [] };
+    for (const child of children) {
+      const side = nodes[child].side ?? inheritedSide;
+      stacks[side].push(branchStats(child, depth + 1, side));
+    }
+    const stackHeight = (side: Side) => stacks[side].reduce((sum, child) => sum + child.height, 0) + Math.max(0, stacks[side].length - 1) * 24;
+    const childStats = [...stacks.left, ...stacks.right];
+    return {
+      height: Math.max(height, stackHeight('left'), stackHeight('right')),
+      count: 1 + childStats.reduce((sum, child) => sum + child.count, 0),
+      placedTop: Math.min(placedTop, ...childStats.map((child) => child.placedTop)),
+      placedBottom: Math.max(placedBottom, ...childStats.map((child) => child.placedBottom)),
+    };
+  };
+  const loads: Record<Side, { height: number; count: number }> = {
+    left: { height: 0, count: 0 },
+    right: { height: 0, count: 0 },
+  };
+  for (const c of root.children) {
+    const side = nodes[c].side === 'left' ? 'left' : 'right';
+    const branch = branchStats(c, 1, side);
+    const placedHeight = Number.isFinite(branch.placedTop) ? branch.placedBottom - branch.placedTop : 0;
+    loads[side].height += Math.max(branch.height, placedHeight) + 30;
+    loads[side].count += branch.count;
+  }
+  if (loads.left.height !== loads.right.height) return loads.left.height < loads.right.height ? 'left' : 'right';
+  if (loads.left.count !== loads.right.count) return loads.left.count < loads.right.count ? 'left' : 'right';
+  return 'right';
 }
 
 export function addChild(
@@ -110,7 +151,7 @@ export function addSibling(doc: MindMapDoc, id: NodeId, text = DEFAULT_TOPIC_TEX
   if (!node?.parentId) return addChild(doc, id, text);
   const parent = doc.nodes[node.parentId];
   const result = addChild(doc, parent.id, text, parent.children.indexOf(id) + 1);
-  return node.side ? { doc: setSide(result.doc, result.id, node.side), id: result.id } : result;
+  return node.parentId !== doc.rootId && node.side ? { doc: setSide(result.doc, result.id, node.side), id: result.id } : result;
 }
 
 export function removeNode(doc: MindMapDoc, id: NodeId): MindMapDoc {
@@ -194,7 +235,7 @@ export const toggleChecked = (doc: MindMapDoc, id: NodeId): MindMapDoc =>
 
 export function setSide(doc: MindMapDoc, id: NodeId, side: Side): MindMapDoc {
   const node = doc.nodes[id];
-  if (!node || node.parentId !== doc.rootId || node.side === side) return doc;
+  if (!node || !node.parentId || node.side === side) return doc;
   return withNodes(doc, { ...doc.nodes, [id]: { ...node, side } });
 }
 
@@ -210,24 +251,32 @@ export function canMove(doc: MindMapDoc, id: NodeId, newParentId: NodeId): boole
 }
 
 /** Re-parents `id` (with its subtree) as the last child of `newParentId`. */
-export function moveNode(doc: MindMapDoc, id: NodeId, newParentId: NodeId, side?: Side): MindMapDoc {
+export function moveNode(doc: MindMapDoc, id: NodeId, newParentId: NodeId, side?: Side, positions?: Record<NodeId, { x: number; y: number }>): MindMapDoc {
   if (!canMove(doc, id, newParentId)) return doc;
   const nodes: Nodes = { ...doc.nodes };
   const node = nodes[id];
+  const previousSide = sideOf(doc, id);
   const oldParent = nodes[node.parentId!];
   nodes[oldParent.id] = { ...oldParent, children: oldParent.children.filter((c) => c !== id) };
   const newParent = nodes[newParentId];
   const moved: MindNode = { ...node, parentId: newParentId };
-  if (newParentId === doc.rootId) moved.side = side ?? pickSide(nodes, newParent);
+  const nextSide = side ?? (newParentId === doc.rootId ? pickSide(nodes, newParent) : undefined);
+  if (nextSide) moved.side = nextSide;
   else delete moved.side;
   nodes[id] = moved;
-  const clearPlacedPositions = (currentId: NodeId) => {
-    const current = nodes[currentId];
-    if (current.position) { const { position: _position, ...rest } = current; nodes[currentId] = rest; }
-    for (const child of current.children) clearPlacedPositions(child);
-  };
-  clearPlacedPositions(id);
+  // Keep the dropped location and subtree geometry. The layout reflows around
+  // these user placements instead of snapping a reparented branch back.
   nodes[newParentId] = { ...newParent, children: [...newParent.children, id] };
+  const directionChanged = nextSide !== undefined && previousSide !== nextSide;
+  const descendants = directionChanged ? new Set(descendantIds(nodes, id)) : new Set<NodeId>();
+  for (const descendant of descendants) {
+    if (!nodes[descendant].position) continue;
+    const { position: _position, ...rest } = nodes[descendant];
+    nodes[descendant] = rest;
+  }
+  for (const [positionId, position] of Object.entries(positions ?? {})) {
+    if (nodes[positionId] && !descendants.has(positionId)) nodes[positionId] = { ...nodes[positionId], position };
+  }
   syncAncestors(nodes, oldParent.id);
   syncAncestors(nodes, newParentId);
   return withNodes(doc, nodes);

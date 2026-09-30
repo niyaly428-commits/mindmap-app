@@ -5,7 +5,7 @@ export type Popover =
   | { kind: 'menu'; nodeId: NodeId; nodeIds?: NodeId[]; x: number; y: number }
   | { kind: 'note'; nodeId: NodeId }
   | { kind: 'link'; nodeId: NodeId }
-  | { kind: 'due'; nodeId: NodeId };
+  | { kind: 'due'; nodeId: NodeId; nodeIds?: NodeId[] };
 
 /** Context menu / memo / link / due date popups (UI-only state, not saved). */
 export const usePopoverStore = create<{ popover: Popover | null }>()(() => ({ popover: null }));

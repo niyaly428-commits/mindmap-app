@@ -101,6 +101,21 @@ describe('createNextDayMap', () => {
     for (const id of Object.keys(next.nodes)) expect(src.nodes[id]).toBeUndefined();
   });
 
+  it('does not carry manual canvas positions into the next day while preserving due dates', () => {
+    let src = createMap('2026-09-29');
+    const branch = addChild(src, src.rootId, 'Branch');
+    src = setAttributes(branch.doc, branch.id, { dueDate: '2026-10-07' });
+    src = { ...src, nodes: { ...src.nodes, [branch.id]: { ...src.nodes[branch.id], position: { x: -800, y: 240 } } } };
+    const leaf = addChild(src, branch.id, 'Leaf');
+    src = { ...leaf.doc, nodes: { ...leaf.doc.nodes, [leaf.id]: { ...leaf.doc.nodes[leaf.id], position: { x: -1000, y: 300 } } } };
+    const next = createNextDayMap(src);
+    const copiedRoot = next.nodes[next.rootId].children[0];
+    const copiedLeaf = next.nodes[copiedRoot].children[0];
+    expect(next.nodes[copiedRoot].position).toBeUndefined();
+    expect(next.nodes[copiedRoot].dueDate).toBe('2026-10-07');
+    expect(next.nodes[copiedLeaf].position).toBeUndefined();
+  });
+
   it('always carries routine main tasks, including completed ones, and preserves the routine flag', () => {
     let source = createMap('Routine');
     const routine = addChild(source, source.rootId, 'Every day'); source = routine.doc;

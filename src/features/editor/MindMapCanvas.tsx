@@ -5,6 +5,7 @@ import {
   BackgroundVariant,
   BaseEdge,
   Controls,
+  PanOnScrollMode,
   ReactFlow,
   useReactFlow,
   type Edge,
@@ -73,10 +74,14 @@ function toFlow(
         branch: box.branch,
         images: node.images,
       },
-    });
+      });
       if (node.parentId) {
-        const right = box.side === 'right';
-        const siblings = doc.nodes[node.parentId].children.filter((siblingId) => boxes.has(siblingId) && boxes.get(siblingId)!.side === box.side);
+        const parentBox = boxes.get(node.parentId)!;
+        const right = box.x + box.width / 2 >= parentBox.x + parentBox.width / 2;
+        const siblings = doc.nodes[node.parentId].children.filter((siblingId) => {
+          const sibling = boxes.get(siblingId);
+          return sibling && (sibling.x + sibling.width / 2 >= parentBox.x + parentBox.width / 2) === right;
+        });
         const sourceIndex = siblings.indexOf(node.id);
         const siblingCenters = siblings.map((siblingId) => { const sibling = boxes.get(siblingId)!; return sibling.y + sibling.height / 2; });
         edges.push({
@@ -212,14 +217,30 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       const side = p.x < 0 ? 'left' : 'right';
       const target = hitTest(boxes, p, ids);
       const { moveNode, setPositions, select } = useEditorStore.getState();
-      if (target) moveNode(node.id, target, side);
-      else {
-        const origin = boxes.get(node.id)!;
-        const dx = node.position.x - origin.x;
-        const dy = node.position.y - origin.y;
+      const origin = boxes.get(node.id)!;
+      const dx = node.position.x - origin.x;
+      const dy = node.position.y - origin.y;
+      if (target) {
+        const parent = boxes.get(target)!;
+        const targetLeft = target === doc.rootId ? side === 'left' : parent.side === 'left';
+        const gap = target === doc.rootId
+          ? doc.designPreset === 'soft-organic' || !doc.designPreset ? 84 : doc.designPreset === 'clean-structured' ? 62 : 66
+          : 48;
+        const placedX = targetLeft ? parent.x - gap - origin.width : parent.x + parent.width + gap;
+        const translateX = placedX - node.position.x;
+        const positions: Record<NodeId, XYPosition> = {};
+        for (const id of ids) {
+          const box = boxes.get(id);
+          if (box) positions[id] = { x: box.x + dx + translateX, y: box.y + dy };
+        }
+        moveNode(node.id, target, targetLeft ? 'left' : 'right', positions);
+      } else {
         const positions: Record<NodeId, XYPosition> = {};
         for (const id of ids) { const b = boxes.get(id); if (b) positions[id] = { x: b.x + dx, y: b.y + dy }; }
-        setPositions(positions, doc.nodes[node.id].parentId === doc.rootId ? { id: node.id, side } : undefined);
+        const parentId = doc.nodes[node.id].parentId;
+        const parent = parentId ? boxes.get(parentId) : undefined;
+        const nodeSide = parent && node.position.x + origin.width / 2 < parent.x + parent.width / 2 ? 'left' : 'right';
+        setPositions(positions, parentId ? { id: node.id, side: nodeSide } : undefined);
       }
       select(node.id);
     },
@@ -255,6 +276,10 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       multiSelectionKeyCode={null}
       panActivationKeyCode={null}
       zoomOnDoubleClick={false}
+      panOnScroll
+      panOnScrollMode={PanOnScrollMode.Vertical}
+      zoomOnScroll
+      zoomActivationKeyCode="Control"
       minZoom={0.2}
       maxZoom={2.5}
       fitView
