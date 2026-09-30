@@ -3,10 +3,12 @@ import {
   applyNodeChanges,
   Background,
   BackgroundVariant,
+  BaseEdge,
   Controls,
   ReactFlow,
   useReactFlow,
   type Edge,
+  type EdgeProps,
   type OnNodeDrag,
   type OnNodesChange,
   type XYPosition,
@@ -19,8 +21,25 @@ import { TopicNode, type TopicNodeType } from './TopicNode';
 import { useDragStore } from './dragStore';
 import { openPopover } from './popoverStore';
 import { branchColor } from './theme';
+import { publishCurrentLayout } from './pdfExport';
 
 const nodeTypes = { topic: TopicNode };
+const edgeTypes = { structured: StructuredEdge };
+
+function StructuredEdge({ id, sourceX, sourceY, targetX, targetY, data, style, markerStart, markerEnd, interactionWidth }: EdgeProps<Edge>) {
+  const direction = targetX >= sourceX ? 1 : -1;
+  const routeIndex = Number(data?.routeIndex ?? 0);
+  const routeCount = Number(data?.routeCount ?? 1);
+  const busX = sourceX + direction * 28;
+  const firstY = Number(data?.firstY ?? targetY);
+  const lastY = Number(data?.lastY ?? targetY);
+  const path = routeCount < 2
+    ? `M ${sourceX},${sourceY} H ${busX} V ${targetY} H ${targetX}`
+    : routeIndex === 0
+      ? `M ${sourceX},${sourceY} H ${busX} V ${firstY} V ${lastY} M ${busX},${targetY} H ${targetX}`
+      : `M ${busX},${targetY} H ${targetX}`;
+  return <g data-route-parent-id={String(data?.routeParentId ?? '')}><BaseEdge id={id} path={path} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={interactionWidth} /></g>;
+}
 
 function toFlow(
   doc: MindMapDoc,
@@ -51,21 +70,26 @@ function toFlow(
         bold: node.bold,
         textColor: node.textColor,
         routine: node.routine,
+        branch: box.branch,
         images: node.images,
       },
     });
-    if (node.parentId) {
-      const right = box.side === 'right';
-      edges.push({
+      if (node.parentId) {
+        const right = box.side === 'right';
+        const siblings = doc.nodes[node.parentId].children.filter((siblingId) => boxes.has(siblingId) && boxes.get(siblingId)!.side === box.side);
+        const sourceIndex = siblings.indexOf(node.id);
+        const siblingCenters = siblings.map((siblingId) => { const sibling = boxes.get(siblingId)!; return sibling.y + sibling.height / 2; });
+        edges.push({
         id: `e-${box.id}`,
         source: node.parentId,
         target: box.id,
-        sourceHandle: right ? 'sr' : 'sl',
+          sourceHandle: right ? 'sr' : 'sl',
         targetHandle: right ? 'tl' : 'tr',
-        type: 'default',
+          type: doc.designPreset === 'soft-organic' || !doc.designPreset ? 'default' : 'structured',
+          data: { routeIndex: sourceIndex, routeCount: siblings.length, firstY: Math.min(...siblingCenters), lastY: Math.max(...siblingCenters), routeParentId: node.parentId },
         focusable: false,
         selectable: false,
-        style: { stroke: color, strokeWidth: box.depth === 1 ? 3 : 2 },
+        style: { stroke: color, strokeWidth: doc.designPreset === 'soft-organic' ? (box.depth === 1 ? 2.5 : 1.8) : doc.designPreset === 'clean-structured' ? 1.6 : 1.2 },
       });
     }
   }
@@ -88,11 +112,13 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
   const { screenToFlowPosition } = useReactFlow();
   // Real rendered sizes reported by React Flow; the layout uses them so topics never overlap.
   const [sizes, setSizes] = useState<ReadonlyMap<NodeId, Size>>(() => new Map());
-  const boxes = useMemo(() => layoutMap(doc, defaultMeasurer, sizes), [doc, sizes]);
+  const boxes = useMemo(() => layoutMap(doc, defaultMeasurer, sizes, doc.designPreset), [doc, sizes]);
   const flow = useMemo(() => toFlow(doc, boxes, sizes), [doc, boxes, sizes]);
   const [nodes, setNodes] = useState(flow.nodes);
   const drag = useRef<{ ids: Set<NodeId> } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+
+  useEffect(() => { publishCurrentLayout(doc.id, Array.from(boxes.values())); }, [doc.id, boxes]);
 
   useEffect(() => {
     const root = document.querySelector('.react-flow');
@@ -103,6 +129,7 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       if (event.button !== 0 || !target.closest('.react-flow__pane') || target.closest('.react-flow__node')) return;
       start = { x: event.clientX, y: event.clientY };
       event.preventDefault(); event.stopPropagation();
+      // Capture only gestures that began on blank canvas; node drags remain owned by React Flow.
       (root as HTMLElement).setPointerCapture?.(event.pointerId);
       setSelectionRect({ left: start.x, top: start.y, width: 0, height: 0 });
     };
@@ -184,9 +211,16 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       const p = screenToFlowPosition(pointOf(event));
       const side = p.x < 0 ? 'left' : 'right';
       const target = hitTest(boxes, p, ids);
-      const { moveNode, setSide, select } = useEditorStore.getState();
+      const { moveNode, setPositions, select } = useEditorStore.getState();
       if (target) moveNode(node.id, target, side);
-      else if (doc.nodes[node.id].parentId === doc.rootId) setSide(node.id, side);
+      else {
+        const origin = boxes.get(node.id)!;
+        const dx = node.position.x - origin.x;
+        const dy = node.position.y - origin.y;
+        const positions: Record<NodeId, XYPosition> = {};
+        for (const id of ids) { const b = boxes.get(id); if (b) positions[id] = { x: b.x + dx, y: b.y + dy }; }
+        setPositions(positions, doc.nodes[node.id].parentId === doc.rootId ? { id: node.id, side } : undefined);
+      }
       select(node.id);
     },
     [boxes, doc, flow.nodes, screenToFlowPosition],
@@ -198,13 +232,16 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       nodes={nodes}
       edges={flow.edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       onNodeDoubleClick={(_, node) => useEditorStore.getState().startEditing(node.id)}
       onNodesChange={onNodesChange}
       onNodeClick={(_, n) => useEditorStore.getState().select(n.id)}
       onNodeContextMenu={(e, n) => {
         e.preventDefault();
-        useEditorStore.getState().select(n.id);
-        openPopover({ kind: 'menu', nodeId: n.id, x: e.clientX, y: e.clientY });
+        const store = useEditorStore.getState();
+        const ids = store.selectedIds.includes(n.id) ? store.selectedIds : [n.id];
+        if (ids.length === 1 && store.selectedIds[0] !== n.id) store.select(n.id);
+        openPopover({ kind: 'menu', nodeId: n.id, nodeIds: ids, x: e.clientX, y: e.clientY });
       }}
       onPaneClick={() => useEditorStore.getState().select(null)}
       onNodeDragStart={onNodeDragStart}
@@ -223,7 +260,7 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       fitView
       fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
     >
-      <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#d6d3c8" />
+      <Background variant={BackgroundVariant.Dots} gap={doc.designPreset === 'soft-analytical' ? 20 : 24} size={1} color={doc.designPreset === 'soft-organic' ? '#ded9cf' : doc.designPreset === 'clean-structured' ? '#d8e0ea' : '#dfe4ef'} />
       <Controls showInteractive={false} />
     </ReactFlow>
     {selectionRect && <div className="selection-rectangle" style={{ left: selectionRect.left, top: selectionRect.top, width: selectionRect.width, height: selectionRect.height }} />}

@@ -15,7 +15,7 @@ export function Popovers() {
   if (!popover || !exists) return null;
   switch (popover.kind) {
     case 'menu':
-      return <ContextMenu key={popover.nodeId} nodeId={popover.nodeId} x={popover.x} y={popover.y} />;
+      return <ContextMenu key={popover.nodeId} nodeId={popover.nodeId} nodeIds={popover.nodeIds} x={popover.x} y={popover.y} />;
     case 'note':
       return <NotePopover key={popover.nodeId} nodeId={popover.nodeId} />;
     case 'link':
@@ -40,10 +40,12 @@ function Backdrop({ onClose }: { onClose: () => void }) {
 }
 
 /** Status choices (未着手 / 進行中 / 待ち / 完了) shared by the context menu and the status picker on topics. */
-export function StatusOptions({ nodeId, onDone }: { nodeId: NodeId; onDone: () => void }) {
+export function StatusOptions({ nodeId, nodeIds = [nodeId], onDone }: { nodeId: NodeId; nodeIds?: NodeId[]; onDone: () => void }) {
   const current = useEditorStore((s) => displayStatus(s.doc!.nodes[nodeId]));
   const choose = (s: DisplayStatus) => {
-    useEditorStore.getState().setStatus(nodeId, s);
+    const store = useEditorStore.getState();
+    if (nodeIds.length > 1) store.bulkSetStatus(s);
+    else store.setStatus(nodeId, s);
     onDone();
   };
   return (
@@ -65,10 +67,11 @@ export function StatusOptions({ nodeId, onDone }: { nodeId: NodeId; onDone: () =
   );
 }
 
-function ContextMenu({ nodeId, x, y }: { nodeId: NodeId; x: number; y: number }) {
+function ContextMenu({ nodeId, nodeIds = [nodeId], x, y }: { nodeId: NodeId; nodeIds?: NodeId[]; x: number; y: number }) {
   const isRoot = useEditorStore((s) => s.doc!.rootId === nodeId);
   const status = useEditorStore((s) => displayStatus(s.doc!.nodes[nodeId]));
-  const routine = useEditorStore((s) => !!s.doc!.nodes[nodeId].routine);
+  const routine = useEditorStore((s) => nodeIds.every((id) => !!s.doc!.nodes[id]?.routine));
+  const multiple = nodeIds.length > 1;
   const [subOpen, setSubOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
@@ -94,7 +97,7 @@ function ContextMenu({ nodeId, x, y }: { nodeId: NodeId; x: number; y: number })
         <button role="menuitem" className="menu-item" onClick={() => openPopover({ kind: 'due', nodeId })}>
           <CalendarIcon size={14} /> 期日
         </button>
-        {!isRoot && <button role="menuitemcheckbox" aria-checked={routine} className="menu-item" onClick={() => { useEditorStore.getState().setAttributes(nodeId, { routine: !routine }); closePopover(); }}>{routine ? '✓ ' : ''}ルーティンタスク</button>}
+        {!isRoot && <button role="menuitemcheckbox" aria-checked={routine} className="menu-item" onClick={() => { const store = useEditorStore.getState(); if (multiple) store.bulkSetRoutine(!routine); else store.setAttributes(nodeId, { routine: !routine }); closePopover(); }}>{routine ? '✓ ' : ''}{multiple ? `${nodeIds.length}件に` : ''}ルーティンタスク</button>}
         {!isRoot && (
           <div className="menu-sub" onMouseEnter={() => setSubOpen(true)} onMouseLeave={() => setSubOpen(false)}>
             <button
@@ -108,7 +111,7 @@ function ContextMenu({ nodeId, x, y }: { nodeId: NodeId; x: number; y: number })
             </button>
             {subOpen && (
               <div className="context-menu submenu" role="menu">
-                <StatusOptions nodeId={nodeId} onDone={closePopover} />
+              <StatusOptions nodeId={nodeId} nodeIds={nodeIds} onDone={closePopover} />
               </div>
             )}
           </div>

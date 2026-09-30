@@ -131,4 +131,68 @@ describe('editorStore', () => {
     expect(s().doc!.nodes[a]).toBeUndefined(); expect(s().doc!.nodes[b]).toBeUndefined();
     s().undo(); expect(s().doc!.nodes[a]).toBeDefined(); expect(s().doc!.nodes[b]).toBeDefined();
   });
+
+  it('applies one bulk status change to every selected task in one undo and redo step', () => {
+    s().addChild(); const first = s().selectedId!;
+    s().addSibling(first); const second = s().selectedId!;
+    s().setSelection([first, second]);
+    const history = s().past.length;
+    s().bulkSetStatus('waiting');
+    expect(s().past).toHaveLength(history + 1);
+    expect(s().doc!.nodes[first].status).toBe('waiting');
+    expect(s().doc!.nodes[second].status).toBe('waiting');
+    s().undo();
+    expect(s().doc!.nodes[first].status).toBeUndefined();
+    expect(s().doc!.nodes[second].status).toBeUndefined();
+    s().redo();
+    expect(s().doc!.nodes[first].status).toBe('waiting');
+    expect(s().doc!.nodes[second].status).toBe('waiting');
+
+    s().bulkSetStatus('done');
+    expect(s().doc!.nodes[first].checked).toBe(true);
+    expect(s().doc!.nodes[second].checked).toBe(true);
+    s().undo();
+    expect(s().doc!.nodes[first].checked).toBe(false);
+    expect(s().doc!.nodes[second].checked).toBe(false);
+    s().redo();
+    expect(s().doc!.nodes[first].checked).toBe(true);
+    expect(s().doc!.nodes[second].checked).toBe(true);
+  });
+
+  it('applies routine updates to one selected task only', () => {
+    s().addChild(); const first = s().selectedId!;
+    s().addSibling(first); const second = s().selectedId!;
+    s().setSelection([first]);
+    s().bulkSetRoutine(true);
+    expect(s().doc!.nodes[first].routine).toBe(true);
+    expect(s().doc!.nodes[second].routine).toBeUndefined();
+    s().undo(); expect(s().doc!.nodes[first].routine).toBeUndefined();
+  });
+
+  it('applies routine updates to every selected task in one undo and redo step', () => {
+    s().addChild(); const first = s().selectedId!;
+    s().addSibling(first); const second = s().selectedId!;
+    s().setSelection([first, second]);
+    const history = s().past.length;
+    s().bulkSetRoutine(true);
+    expect(s().past).toHaveLength(history + 1);
+    expect(s().doc!.nodes[first].routine).toBe(true);
+    expect(s().doc!.nodes[second].routine).toBe(true);
+    s().undo();
+    expect(s().doc!.nodes[first].routine).toBeUndefined();
+    expect(s().doc!.nodes[second].routine).toBeUndefined();
+    s().redo();
+    expect(s().doc!.nodes[first].routine).toBe(true);
+    expect(s().doc!.nodes[second].routine).toBe(true);
+  });
+
+  it('stores dragged positions as one undoable map change', () => {
+    s().addChild(); const id = s().selectedId!;
+    const history = s().past.length;
+    s().setPositions({ [id]: { x: 120, y: -40 } });
+    expect(s().doc!.nodes[id].position).toEqual({ x: 120, y: -40 });
+    expect(s().past).toHaveLength(history + 1);
+    s().undo(); expect(s().doc!.nodes[id].position).toBeUndefined();
+    s().redo(); expect(s().doc!.nodes[id].position).toEqual({ x: 120, y: -40 });
+  });
 });

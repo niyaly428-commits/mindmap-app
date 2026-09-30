@@ -1,4 +1,4 @@
-import type { MindMapDoc, NodeId, Side } from './types';
+import type { DesignPreset, MindMapDoc, NodeId, Side } from './types';
 
 export interface NodeBox {
   id: NodeId;
@@ -41,11 +41,6 @@ export const levelStyle = (depth: number): LevelStyle =>
     : depth === 1
       ? { font: `700 15px ${FONT_FAMILY}`, lineHeight: 22, padX: 14, padY: 9, maxTextWidth: 240, minWidth: 80, extra: 22 }
       : { font: `400 13px ${FONT_FAMILY}`, lineHeight: 19, padX: 10, padY: 5, maxTextWidth: 240, minWidth: 60, extra: 20 };
-
-const H_GAP_ROOT = 64;
-const H_GAP = 36;
-const V_GAP_MAIN = 24;
-const V_GAP = 8;
 
 let canvasCtx: CanvasRenderingContext2D | null | undefined;
 
@@ -98,13 +93,16 @@ export function layoutMap(
   doc: MindMapDoc,
   measure: TextMeasurer = defaultMeasurer,
   measured?: ReadonlyMap<NodeId, Size>,
+  preset: DesignPreset = 'soft-organic',
 ): Map<NodeId, NodeBox> {
   const boxes = new Map<NodeId, NodeBox>();
   const sizes = new Map<NodeId, Size>();
   const subtree = new Map<NodeId, number>();
 
   const visibleChildren = (id: NodeId) => (doc.nodes[id].collapsed ? [] : doc.nodes[id].children);
-  const gapFor = (depth: number) => (depth === 1 ? V_GAP_MAIN : V_GAP);
+  // Keep sibling connector lanes separate, including the vertical bands occupied by
+  // each sibling's descendants. Structured presets need room for clear orthogonal turns.
+  const gapFor = (depth: number) => preset === 'soft-organic' ? (depth === 1 ? 34 : 14) : preset === 'clean-structured' ? (depth === 1 ? 28 : 18) : (depth === 1 ? 30 : 16);
 
   const sizeOf = (id: NodeId, depth: number) => {
     let s = sizes.get(id);
@@ -130,7 +128,10 @@ export function layoutMap(
   function place(id: NodeId, anchorX: number, top: number, side: Side, depth: number, branch: number) {
     const { width, height } = sizeOf(id, depth);
     const centerY = top + subtreeHeight(id, depth) / 2;
-    const gap = depth === 1 ? H_GAP_ROOT : H_GAP;
+    const baseGap = preset === 'soft-organic' ? (depth === 1 ? 84 : 48) : preset === 'clean-structured' ? (depth === 1 ? 62 : 48) : (depth === 1 ? 66 : 52);
+    // Reserve a vertical routing bus between each parent and its children.
+    const routeGap = preset === 'soft-organic' ? 0 : 32;
+    const gap = Math.max(baseGap, routeGap);
     const x = side === 'right' ? anchorX + gap : anchorX - gap - width;
     boxes.set(id, { id, x, y: centerY - height / 2, width, height, depth, side, branch });
     placeStack(visibleChildren(id), side === 'right' ? x + width : x, centerY, side, depth + 1, branch);
@@ -160,6 +161,14 @@ export function layoutMap(
     const left = root.children.filter((c) => doc.nodes[c].side === 'left');
     placeStack(right, rootSize.width / 2, 0, 'right', 1, -1);
     placeStack(left, -rootSize.width / 2, 0, 'left', 1, -1);
+  }
+  // Preserve positions produced by a completed React Flow drag. Descendants are
+  // stored too, so moving a branch keeps its internal geometry intact.
+  for (const node of Object.values(doc.nodes)) {
+    if (node.position && boxes.has(node.id)) {
+      const box = boxes.get(node.id)!;
+      boxes.set(node.id, { ...box, x: node.position.x, y: node.position.y });
+    }
   }
   return boxes;
 }

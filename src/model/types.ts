@@ -44,6 +44,8 @@ export interface MindNode {
   image?: { assetId: string; width: number; height: number };
   images?: string[];
   routine?: boolean;
+  /** User placed canvas position, retained across layout refreshes. */
+  position?: { x: number; y: number };
 }
 
 export interface MindMapDoc {

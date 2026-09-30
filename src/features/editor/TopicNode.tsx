@@ -23,6 +23,7 @@ export type TopicNodeData = {
   bold?: boolean;
   textColor?: TextColor;
   routine?: boolean;
+  branch?: number;
   images?: string[];
 };
 
@@ -93,6 +94,7 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
       <Handle type="target" position={Position.Left} id="tl" style={hidden} isConnectable={false} />
       <Handle type="target" position={Position.Right} id="tr" style={hidden} isConnectable={false} />
       {data.depth > 0 && <StatusControl id={id} status={data.status} />}
+      {data.depth === 1 && <span className="topic-section-number" aria-hidden>{(data.branch ?? 0) + 1}</span>}
       {data.routine && <span className="routine-mark" title="Routine">↻</span>}
       {editing ? (
         <>
@@ -154,7 +156,7 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
         </a>
       )}
       {imageUrls.length > 0 && <div className="topic-images">{imageUrls.map((image) => <span key={image.id}><button aria-label="画像を拡大" onPointerDown={stop} onClick={(e) => { e.stopPropagation(); setPreview(image.url); }}><img src={image.url} /></button><button className="image-remove" aria-label="画像を削除" onPointerDown={stop} onClick={(e) => { e.stopPropagation(); useEditorStore.getState().setAttributes(id, { images: (data.images ?? []).filter((assetId) => assetId !== image.id) }); }}>×</button></span>)}</div>}
-      {preview && <div className="image-lightbox" role="dialog" onClick={() => setPreview(null)}><button className="lightbox-close" onClick={() => setPreview(null)}>×</button><img src={preview} /></div>}
+      {preview && createPortal(<div className="image-lightbox" role="dialog" aria-label="画像プレビュー" onClick={() => setPreview(null)}><button className="lightbox-close" aria-label="閉じる" onClick={() => setPreview(null)}>×</button><img src={preview} alt="添付画像" onClick={(event) => event.stopPropagation()} /></div>, document.body)}
     </div>
   );
 }

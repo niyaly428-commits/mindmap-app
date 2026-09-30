@@ -25,6 +25,7 @@ interface EditorState {
   toggleChecked: (id?: NodeId) => void;
   setText: (id: NodeId, text: string) => void;
   moveNode: (id: NodeId, newParentId: NodeId, side?: Side) => void;
+  setPositions: (positions: Record<NodeId, { x: number; y: number }>, sideChange?: { id: NodeId; side: Side }) => void;
   setSide: (id: NodeId, side: Side) => void;
   setDesignPreset: (value: DesignPreset) => void;
   setColorTheme: (value: ColorTheme) => void;
@@ -138,6 +139,18 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     moveNode: (id, newParentId, side) => {
       const { doc } = get();
       if (doc) commit(tree.moveNode(doc, id, newParentId, side));
+    },
+    setPositions: (positions, sideChange) => {
+      const { doc } = get(); if (!doc) return;
+      const nodes = { ...doc.nodes }; let changed = false;
+      for (const [id, position] of Object.entries(positions)) {
+        const node = nodes[id]; if (node && (node.position?.x !== position.x || node.position?.y !== position.y)) { nodes[id] = { ...node, position }; changed = true; }
+      }
+      if (sideChange && nodes[sideChange.id]?.side !== sideChange.side) {
+        nodes[sideChange.id] = { ...nodes[sideChange.id], side: sideChange.side };
+        changed = true;
+      }
+      if (changed) commit({ ...doc, nodes });
     },
     setSide: (id, side) => {
       const { doc } = get();

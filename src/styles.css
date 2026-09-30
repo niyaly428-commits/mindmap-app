@@ -149,11 +149,27 @@ button {
 .editor-page.theme-fresh { --accent:#31a58c; --bg:#f0f8f5; }
 .editor-page.theme-monochrome { --accent:#555b63; --bg:#f3f4f5; }
 .editor-page { background:var(--bg); }
-.preset-soft-organic .topic { border-radius:18px; padding:10px 15px; }
-.preset-clean-structured .topic { border-radius:5px; padding:7px 11px; box-shadow:0 1px 2px #00000010; }
-.preset-soft-analytical .topic { border-radius:14px; padding:8px 12px; background:#ffffffee; box-shadow:0 3px 12px #33415512; }
-.preset-soft-analytical .react-flow__edge path { stroke-width:1.25px !important; }
-.preset-clean-structured .react-flow__edge path { stroke-width:1.8px !important; }
+.preset-soft-organic .editor-canvas { background:#fbf8f2; }
+.preset-soft-organic .topic { border-radius:24px; padding:10px 17px; box-shadow:0 4px 14px #435a7612; }
+.preset-soft-organic .topic-root { color:#263f67; background:#dceafe; border-color:#b8d0f5; border-radius:28px; }
+.preset-soft-organic .topic-main { border:0; border-radius:999px; padding:10px 16px; box-shadow:0 3px 10px #274b7218; }
+.preset-soft-organic .topic-sub { border-radius:18px; padding:7px 12px; background:color-mix(in srgb,var(--branch) 10%,#fff); border-color:color-mix(in srgb,var(--branch) 15%,transparent); }
+.preset-soft-organic .react-flow__edge path { stroke-linecap:round; }
+.preset-clean-structured .editor-canvas { background:#f5f8fc; }
+.preset-clean-structured .topic { border-radius:5px; padding:7px 11px; box-shadow:none; }
+.preset-clean-structured .topic-root { color:#fff; background:#34445c; border-color:#34445c; border-radius:7px; }
+.preset-clean-structured .topic-main { color:#28364a; background:color-mix(in srgb,var(--branch) 16%,#fff); border:0; border-left:3px solid var(--branch); border-radius:4px; }
+.preset-clean-structured .topic-sub { color:#34445c; background:#edf1f6; border:1px solid #e1e7ef; border-radius:4px; }
+.preset-clean-structured .react-flow__edge path { stroke-linecap:square; }
+.preset-soft-analytical .editor-canvas { background:#f2f5fb; }
+.preset-soft-analytical .topic { border-radius:13px; padding:8px 12px; box-shadow:0 3px 12px #33415512; }
+.preset-soft-analytical .topic-root { color:#fff; background:linear-gradient(135deg,#385980,#587ba4); border-color:#385980; border-radius:13px; box-shadow:0 5px 16px #304b6d2b; }
+.preset-soft-analytical .topic-main { color:#263b54; background:color-mix(in srgb,var(--branch) 13%,#fff); border:1px solid color-mix(in srgb,var(--branch) 25%,#fff); border-radius:17px; }
+.preset-soft-analytical .topic-sub { background:#fff; border-color:#e5eaf2; border-radius:9px; box-shadow:0 2px 8px #3341550c; }
+.preset-soft-analytical .react-flow__edge path { stroke-linecap:round; }
+.topic-section-number { display:none; }
+.preset-soft-analytical .topic-section-number { display:inline-grid; flex:none; place-items:center; width:22px; height:22px; margin:-1px 1px 0 -2px; border-radius:50%; color:#fff; background:var(--branch); font-size:11px; font-weight:700; }
+.preset-soft-analytical .topic-main { padding:9px 13px 9px 9px; }
 .topic.is-routine { outline:1px dashed color-mix(in srgb,var(--branch) 70%, transparent); }
 .routine-mark { position:absolute; top:-7px; right:-7px; border-radius:50%; background:var(--panel); color:var(--branch); font-size:14px; line-height:16px; width:17px; height:17px; text-align:center; }
 .topic.is-multi-selected { box-shadow:0 0 0 3px #4d90fe88; }
@@ -164,7 +180,8 @@ button {
 .topic-images button { border:0; background:none; padding:0; cursor:pointer; }
 .topic-images .image-remove { position:absolute; top:-5px; right:-5px; background:#fff; border-radius:50%; width:14px; height:14px; line-height:12px; box-shadow:0 1px 4px #0004; }
 .image-lightbox,.shortcut-modal-backdrop { position:fixed; inset:0; z-index:1000; background:#10141ccc; display:grid; place-items:center; }
-.image-lightbox img { max-width:90vw; max-height:88vh; object-fit:contain; }
+.image-lightbox { padding:24px; overflow:auto; }
+.image-lightbox > img { display:block; width:auto; height:auto; max-width:calc(100vw - 48px); max-height:calc(100vh - 48px); object-fit:contain; }
 .lightbox-close { position:absolute; top:12px; right:16px; border:0; background:#fff; border-radius:50%; font-size:24px; width:38px; height:38px; cursor:pointer; }
 .shortcut-help-trigger { position:absolute; bottom:10px; right:12px; z-index:5; border:1px solid var(--border); background:var(--panel); color:var(--muted); border-radius:8px; padding:5px 9px; cursor:pointer; }
 .shortcut-modal { position:relative; background:var(--panel); padding:25px 30px; border-radius:14px; min-width:min(560px,90vw); box-shadow:0 8px 40px #0005; }

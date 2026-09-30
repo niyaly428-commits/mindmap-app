@@ -221,6 +221,12 @@ export function moveNode(doc: MindMapDoc, id: NodeId, newParentId: NodeId, side?
   if (newParentId === doc.rootId) moved.side = side ?? pickSide(nodes, newParent);
   else delete moved.side;
   nodes[id] = moved;
+  const clearPlacedPositions = (currentId: NodeId) => {
+    const current = nodes[currentId];
+    if (current.position) { const { position: _position, ...rest } = current; nodes[currentId] = rest; }
+    for (const child of current.children) clearPlacedPositions(child);
+  };
+  clearPlacedPositions(id);
   nodes[newParentId] = { ...newParent, children: [...newParent.children, id] };
   syncAncestors(nodes, oldParent.id);
   syncAncestors(nodes, newParentId);

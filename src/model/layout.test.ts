@@ -78,4 +78,35 @@ describe('layoutMap', () => {
     doc = { ...doc, nodes: { ...doc.nodes, [main.id]: { ...doc.nodes[main.id], collapsed: true } } };
     expect(layoutMap(doc, measure).size).toBe(2);
   });
+
+  it.each(['clean-structured', 'soft-analytical'] as const)('%s keeps a deep multi-sibling layout readable', (preset) => {
+    let doc = createMap();
+    const main = addChild(doc, doc.rootId, 'main'); doc = main.doc;
+    for (let i = 0; i < 4; i++) {
+      const child = addChild(doc, main.id, `child ${i}`); doc = child.doc;
+      for (let j = 0; j < 3; j++) doc = addChild(doc, child.id, `leaf ${i}-${j}`).doc;
+    }
+    const boxes = [...layoutMap(doc, measure, undefined, preset).values()];
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(overlaps(boxes[i], boxes[j])).toBe(false);
+    for (const box of boxes) {
+      const parent = doc.nodes[box.id].parentId;
+      if (parent) {
+        const parentBox = boxes.find((candidate) => candidate.id === parent)!;
+        const routeGap = 32;
+        const actualGap = box.side === 'left'
+          ? parentBox.x - (box.x + box.width)
+          : box.x - (parentBox.x + parentBox.width);
+        expect(actualGap).toBeGreaterThanOrEqual(routeGap);
+      }
+    }
+    for (const node of Object.values(doc.nodes)) {
+      const childrenBySide = new Map<string, number[]>();
+      for (const id of node.children) {
+        const box = boxes.find((candidate) => candidate.id === id)!;
+        const centers = childrenBySide.get(String(box.side)) ?? [];
+        centers.push(box.y + box.height / 2); childrenBySide.set(String(box.side), centers);
+      }
+      for (const centers of childrenBySide.values()) expect(centers).toEqual([...centers].sort((a, b) => a - b));
+    }
+  });
 });

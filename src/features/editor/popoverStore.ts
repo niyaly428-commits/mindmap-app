@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { NodeId } from '../../model/types';
 
 export type Popover =
-  | { kind: 'menu'; nodeId: NodeId; x: number; y: number }
+  | { kind: 'menu'; nodeId: NodeId; nodeIds?: NodeId[]; x: number; y: number }
   | { kind: 'note'; nodeId: NodeId }
   | { kind: 'link'; nodeId: NodeId }
   | { kind: 'due'; nodeId: NodeId };
