@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { dueState, formatDue, toISODate } from './date';
+import { dueState, formatDue, taskDueState, toISODate } from './date';
 
 const today = new Date(2026, 8, 30, 12);
 
 describe('due date helpers', () => {
+  it('suppresses urgency coloring only while a task is completed', () => {
+    for (const [date, state] of [['2026-09-30', 'today'], ['2026-09-29', 'overdue']] as const) {
+      expect(taskDueState(date, 'done', today)).toBeNull();
+      expect(taskDueState(date, 'todo', today)).toBe(state);
+      expect(taskDueState(date, 'doing', today)).toBe(state);
+      expect(taskDueState(date, 'waiting', today)).toBe(state);
+    }
+    expect(taskDueState(undefined, 'todo', today)).toBeNull();
+  });
   it('formats local dates', () => {
     expect(toISODate(new Date(2026, 9, 3))).toBe('2026-10-03');
     expect(formatDue('2026-10-03', today)).toBe('10/3');

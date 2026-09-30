@@ -1,5 +1,6 @@
 import type { DesignPreset, MindMapDoc, NodeId, Side } from './types';
 import { descendantIds } from './tree';
+import { dueState } from '../lib/date';
 
 export interface NodeBox {
   id: NodeId;
@@ -250,6 +251,67 @@ export function layoutMap(
       }
     }
     if (!moved) break;
+  }
+  return boxes;
+}
+
+/**
+ * Reorders whole root branches for a temporary Focus Today view. Coordinates are
+ * translated as groups only; the document and saved hand-placed positions remain untouched.
+ */
+export function focusTodayLayout(
+  doc: MindMapDoc,
+  source: ReadonlyMap<NodeId, NodeBox>,
+  today = new Date(),
+): Map<NodeId, NodeBox> {
+  const boxes = new Map(source);
+  const root = doc.nodes[doc.rootId];
+  if (root.collapsed || !boxes.has(root.id)) return boxes;
+  const urgency = (id: NodeId): number => {
+    const node = doc.nodes[id];
+    let priority = 4;
+    if (!node.checked && node.dueDate) {
+      const state = dueState(node.dueDate, today);
+      priority = state === 'today' ? 1 : state === 'overdue' ? 2 : state === 'soon' ? 3 : 4;
+    }
+    for (const child of node.children) priority = Math.min(priority, urgency(child));
+    return priority;
+  };
+  const branches = root.children.map((id, order) => {
+    const ids = [id, ...descendantIds(doc.nodes, id)].filter((nodeId) => boxes.has(nodeId));
+    const branchBoxes = ids.map((nodeId) => boxes.get(nodeId)!);
+    return {
+      id,
+      order,
+      ids,
+      priority: urgency(id),
+      top: Math.min(...branchBoxes.map((box) => box.y)),
+      bottom: Math.max(...branchBoxes.map((box) => box.y + box.height)),
+      center: (Math.min(...branchBoxes.map((box) => box.y)) + Math.max(...branchBoxes.map((box) => box.y + box.height))) / 2,
+    };
+  });
+  const ordered = branches.sort((a, b) => a.priority - b.priority || a.center - b.center || a.order - b.order);
+  if (ordered.length < 2) return boxes;
+  const rootBox = boxes.get(root.id)!;
+  const gap = 40;
+  const totalHeight = ordered.reduce((sum, branch) => sum + branch.bottom - branch.top, 0)
+    + (ordered.length - 1) * gap;
+  let top = -totalHeight / 2;
+  for (const branch of ordered) {
+    let targetTop = top;
+    const rootOverlapsBranch = branch.ids.some((id) => {
+      const original = boxes.get(id)!;
+      const moved = { ...original, y: original.y + targetTop - branch.top };
+      return moved.x < rootBox.x + rootBox.width && rootBox.x < moved.x + moved.width
+        && moved.y < rootBox.y + rootBox.height && rootBox.y < moved.y + moved.height;
+    });
+    if (rootOverlapsBranch) targetTop = Math.max(targetTop, rootBox.y + rootBox.height + gap);
+    const delta = targetTop - branch.top;
+    for (const id of branch.ids) {
+      const box = boxes.get(id)!;
+      boxes.set(id, { ...box, y: box.y + delta });
+    }
+    top = targetTop + branch.bottom - branch.top + gap;
   }
   return boxes;
 }

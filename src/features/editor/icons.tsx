@@ -66,3 +66,16 @@ export function CalendarIcon({ size = 12 }: { size?: number }) {
     </svg>
   );
 }
+
+export type ToolbarIconName = 'child' | 'sibling' | 'delete' | 'focus';
+
+/** Compact line icons used by the editor's primary task actions. */
+export function ToolbarIcon({ name, size = 17 }: { name: ToolbarIconName; size?: number }) {
+  const common = { width: size, height: size, viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.65, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true as const };
+  return <svg {...common}>
+    {name === 'child' && <><circle cx="5" cy="4" r="2" /><circle cx="14.5" cy="15.5" r="2" /><path d="M5 6v4.5c0 2 1.5 3 3.5 3h4" /><path d="m11 11 2 2-2 2" /></>}
+    {name === 'sibling' && <><circle cx="5" cy="4" r="2" /><circle cx="14.5" cy="11" r="2" /><circle cx="14.5" cy="17" r="2" /><path d="M5 6v5c0 1 .8 2 2 2h5" /><path d="M7 13h5" /><path d="m11 11 2 2-2 2" /></>}
+    {name === 'delete' && <><path d="M3.5 5.5h13M8 3h4l1 2.5H7L8 3Z" /><path d="m5.5 6 .8 10h7.4l.8-10M8.5 8.5v5M11.5 8.5v5" /></>}
+    {name === 'focus' && <><circle cx="10" cy="10" r="6.5" /><circle cx="10" cy="10" r="2.5" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></>}
+  </svg>;
+}

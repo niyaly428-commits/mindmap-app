@@ -11,6 +11,7 @@ interface EditorState {
   editingId: NodeId | null;
   /** Uncommitted title while typing in the toolbar or the root topic; shown live in both places. */
   titleDraft: string | null;
+  focusToday: boolean;
   past: MindMapDoc[];
   future: MindMapDoc[];
 
@@ -37,6 +38,7 @@ interface EditorState {
   bulkDelete: () => void;
   setTitle: (title: string) => void;
   setTitleDraft: (draft: string | null) => void;
+  setFocusToday: (enabled: boolean) => void;
   /**
    * `coalesce`: consecutive changes with the same key (e.g. memo auto-saves while typing)
    * are merged into a single undo step.
@@ -89,12 +91,13 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     selectedIds: [],
     editingId: null,
     titleDraft: null,
+    focusToday: false,
     past: [],
     future: [],
 
     load: (doc) => {
       coalesceKey = null;
-      set({ doc, selectedId: doc?.rootId ?? null, selectedIds: [], editingId: null, titleDraft: null, past: [], future: [] });
+      set({ doc, selectedId: doc?.rootId ?? null, selectedIds: [], editingId: null, titleDraft: null, focusToday: false, past: [], future: [] });
     },
     select: (selectedId) => set({ selectedId, selectedIds: selectedId && selectedId !== get().doc?.rootId ? [selectedId] : [], editingId: null }),
     setSelection: (selectedIds) => set({ selectedIds, selectedId: selectedIds.at(-1) ?? null, editingId: null }),
@@ -194,6 +197,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       if (doc) commit(tree.setTitle(doc, title), { titleDraft: null });
     },
     setTitleDraft: (titleDraft) => set({ titleDraft }),
+    setFocusToday: (focusToday) => set({ focusToday }),
     setAttributes: (id, attrs, options) => {
       const { doc } = get();
       if (doc) commit(tree.setAttributes(doc, id, attrs), {}, options?.coalesce);

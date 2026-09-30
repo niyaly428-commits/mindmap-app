@@ -11,6 +11,7 @@ import { TextStyleButtons } from './TopicNode';
 import { closePopover } from './popoverStore';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { printMap } from './pdfExport';
+import { ToolbarIcon } from './icons';
 
 export function EditorPage({ mapId }: { mapId: string }) {
   const doc = useEditorStore((s) => s.doc);
@@ -35,6 +36,7 @@ function Toolbar() {
   const titleDraft = useEditorStore((s) => s.titleDraft);
   const canUndo = useEditorStore((s) => s.past.length > 0);
   const canRedo = useEditorStore((s) => s.future.length > 0);
+  const focusToday = useEditorStore((s) => s.focusToday);
   const imageInput = useRef<HTMLInputElement>(null);
   useEffect(() => { const onAddImage = () => imageInput.current?.click(); window.addEventListener('mindmap:add-image', onAddImage); return () => window.removeEventListener('mindmap:add-image', onAddImage); }, []);
   const store = useEditorStore.getState();
@@ -52,8 +54,14 @@ function Toolbar() {
   return <header className="toolbar">
     <button className="btn" onMouseDown={noFocus} onClick={navigate.toList}>← 一覧</button>
     <input className="toolbar-title" aria-label="マップのタイトル" value={titleDraft ?? doc?.title ?? ''} onChange={(e) => store.setTitleDraft(e.target.value)} onBlur={commitTitle} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { store.setTitleDraft(null); e.currentTarget.blur(); } }} />
-    <div className="toolbar-group"><button className="btn" onMouseDown={noFocus} onClick={() => store.addChild()} disabled={!selectedId}>子タスク</button><button className="btn" onMouseDown={noFocus} onClick={() => store.addSibling()} disabled={!selectedId || selectedId === doc?.rootId}>兄弟タスク</button><button className="btn" onMouseDown={noFocus} onClick={() => store.deleteNode()} disabled={!selectedId || selectedId === doc?.rootId}>削除</button></div>
-    <div className="toolbar-group"><button className="btn" onMouseDown={noFocus} onClick={store.undo} disabled={!canUndo}>Undo</button><button className="btn" onMouseDown={noFocus} onClick={store.redo} disabled={!canRedo}>Redo</button></div>
+    <div className="toolbar-group primary-actions">
+      <button className="btn toolbar-action" onMouseDown={noFocus} onClick={store.undo} disabled={!canUndo} title="Undo"><b>Undo</b></button>
+      <button className="btn toolbar-action" onMouseDown={noFocus} onClick={store.redo} disabled={!canRedo} title="Redo"><b>Redo</b></button>
+      <button className="btn toolbar-action" onMouseDown={noFocus} onClick={() => store.addChild()} disabled={!selectedId} title="Add a child task"><ToolbarIcon name="child" /><b>Child</b></button>
+      <button className="btn toolbar-action" onMouseDown={noFocus} onClick={() => store.addSibling()} disabled={!selectedId || selectedId === doc?.rootId} title="Add a sibling task"><ToolbarIcon name="sibling" /><b>Sibling</b></button>
+      <button className="btn toolbar-action toolbar-delete" onMouseDown={noFocus} onClick={() => store.deleteNode()} disabled={!selectedId || selectedId === doc?.rootId} title="Delete"><ToolbarIcon name="delete" /><b>Delete</b></button>
+      <button className={`btn toolbar-action ${focusToday ? 'is-active' : 'focus-action'}`} onMouseDown={noFocus} onClick={() => store.setFocusToday(!focusToday)} title={focusToday ? 'Return to normal view' : 'Prioritize today tasks'} aria-pressed={focusToday}><ToolbarIcon name="focus" /><b>{focusToday ? 'Reset View' : 'Focus Today'}</b></button>
+    </div>
     <div className="toolbar-group text-style-group"><TextStyleButtons bold={!!selectedNode?.bold} textColor={selectedNode?.textColor} disabled={!selectedNode} onBold={() => store.toggleBold()} onColor={(color) => selectedId && store.setAttributes(selectedId, { textColor: color })} /></div>
     <div className="toolbar-group settings-group"><label>Design<select aria-label="Design preset" value={doc?.designPreset ?? 'soft-organic'} onChange={(e: ChangeEvent<HTMLSelectElement>) => store.setDesignPreset(e.target.value as DesignPreset)}><option value="soft-organic">Soft / Organic</option><option value="clean-structured">Clean / Structured</option><option value="soft-analytical">Soft Analytical</option></select></label><label>Theme<select aria-label="Color theme" value={doc?.colorTheme ?? 'calm-blue'} onChange={(e: ChangeEvent<HTMLSelectElement>) => store.setColorTheme(e.target.value as ColorTheme)}><option value="calm-blue">Calm Blue</option><option value="natural">Natural</option><option value="elegant">Elegant</option><option value="fresh">Fresh</option><option value="monochrome">Monochrome</option></select></label></div>
     <div className="toolbar-group"><label className="btn file-button">画像追加<input ref={imageInput} aria-label="画像追加" hidden type="file" accept="image/*" multiple onChange={(e) => { void addImages(e.target.files); e.currentTarget.value = ''; }} /></label><button className="btn" onMouseDown={noFocus} onClick={() => doc && void printMap(doc)}>PDF出力</button></div>

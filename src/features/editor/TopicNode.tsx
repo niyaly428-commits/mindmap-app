@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { useEditorStore } from '../../store/editorStore';
-import { dueState, formatDue } from '../../lib/date';
+import { formatDue, taskDueState } from '../../lib/date';
 import type { DisplayStatus, TextColor } from '../../model/types';
 import { useDragStore } from './dragStore';
 import { CalendarIcon, LinkIcon, NoteIcon, STATUS_LABELS, StatusIcon, TEXT_COLORS } from './icons';
@@ -57,7 +57,7 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
   useEffect(() => { if (!preview) return; const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setPreview(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [preview]);
 
   const level = data.depth === 0 ? 'root' : data.depth === 1 ? 'main' : 'sub';
-  const due = data.dueDate ? dueState(data.dueDate) : null;
+  const due = taskDueState(data.dueDate, data.status);
   const className = [
     'topic',
     `topic-${level}`,
@@ -65,7 +65,7 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
     isDropTarget && 'is-drop-target',
     isDragging && 'is-dragging',
     data.status === 'done' && 'is-checked',
-    data.dueDate && due !== 'upcoming' && 'has-due',
+    due && due !== 'upcoming' && 'has-due',
     due && `due-${due}`,
     data.routine && 'is-routine',
     selectedMany && 'is-multi-selected',

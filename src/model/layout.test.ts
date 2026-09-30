@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutMap, type NodeBox } from './layout';
+import { focusTodayLayout, layoutMap, type NodeBox } from './layout';
 import { addChild, createMap } from './tree';
 
 const measure = (text: string) => text.length * 10;
@@ -8,6 +8,37 @@ const overlaps = (a: NodeBox, b: NodeBox) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 describe('layoutMap', () => {
+  it('prioritizes branches with unfinished descendant due dates and can reset without changing positions', () => {
+    const today = new Date(2026, 8, 30);
+    let doc = createMap('Focus');
+    const projects: string[] = [];
+    for (const name of ['Other', 'Done only', 'Soon', 'Overdue', 'Today']) {
+      const result = addChild(doc, doc.rootId, name);
+      doc = result.doc;
+      projects.push(result.id);
+    }
+    doc = { ...doc, nodes: { ...doc.nodes,
+      ...Object.fromEntries(projects.map((id, index) => [id, { ...doc.nodes[id], side: index % 2 ? 'left' as const : 'right' as const }])),
+      [projects[0]]: { ...doc.nodes[projects[0]], side: 'right', position: { x: 700, y: 130 } },
+    } };
+    const leafFor = (parent: string, text: string, dueDate: string, checked = false) => {
+      const result = addChild(doc, parent, text);
+      doc = { ...result.doc, nodes: { ...result.doc.nodes, [result.id]: { ...result.doc.nodes[result.id], dueDate, checked } } };
+    };
+    leafFor(projects[1], 'Completed today', '2026-09-30', true);
+    leafFor(projects[2], 'Soon task', '2026-10-04');
+    leafFor(projects[3], 'Overdue task', '2026-09-29');
+    leafFor(projects[4], 'Nested today task', '2026-09-30');
+    const original = layoutMap(doc, measure);
+    const focused = focusTodayLayout(doc, original, today);
+    const order = projects.map((id) => ({ id, y: focused.get(id)!.y })).sort((a, b) => a.y - b.y).map(({ id }) => id);
+    expect(order.slice(0, 3)).toEqual([projects[4], projects[3], projects[2]]);
+    expect(new Set(order.slice(3))).toEqual(new Set([projects[0], projects[1]]));
+    expect(focused.get(projects[0])!.y).not.toBe(original.get(projects[0])!.y);
+    expect(layoutMap(doc, measure).get(projects[0])!.y).toBe(original.get(projects[0])!.y);
+    const focusedBoxes = [...focused.values()];
+    for (let i = 0; i < focusedBoxes.length; i++) for (let j = i + 1; j < focusedBoxes.length; j++) expect(overlaps(focusedBoxes[i], focusedBoxes[j])).toBe(false);
+  });
   it('centers the root and places main topics on both sides', () => {
     let doc = createMap();
     const ids: string[] = [];

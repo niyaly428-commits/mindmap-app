@@ -1,3 +1,5 @@
+import type { DisplayStatus } from '../model/types';
+
 /** Local date as "YYYY-MM-DD" (the format of <input type="date"> and `MindNode.dueDate`). */
 export const toISODate = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -39,4 +41,10 @@ export function dueState(iso: string, today = new Date()): DueState {
   if (days < 0) return 'overdue';
   if (days === 0) return 'today';
   return days <= 7 ? 'soon' : days <= 30 ? 'month' : 'upcoming';
+}
+
+/** Completed tasks keep their due date but no longer show urgency coloring. */
+export function taskDueState(iso: string | undefined, status: DisplayStatus, today = new Date()): DueState | null {
+  if (!iso || status === 'done') return null;
+  return dueState(iso, today);
 }

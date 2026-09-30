@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react';
 import { useEditorStore } from '../../store/editorStore';
 import { descendantIds, displayStatus } from '../../model/tree';
-import { defaultMeasurer, iconCount, layoutMap, maxNodeWidth, type NodeBox, type Size } from '../../model/layout';
+import { defaultMeasurer, focusTodayLayout, iconCount, layoutMap, maxNodeWidth, type NodeBox, type Size } from '../../model/layout';
 import type { MindMapDoc, NodeId } from '../../model/types';
 import { TopicNode, type TopicNodeType } from './TopicNode';
 import { useDragStore } from './dragStore';
@@ -114,16 +114,34 @@ function hitTest(boxes: Map<NodeId, NodeBox>, p: XYPosition, exclude: Set<NodeId
 }
 
 export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+  const focusToday = useEditorStore((s) => s.focusToday);
   // Real rendered sizes reported by React Flow; the layout uses them so topics never overlap.
   const [sizes, setSizes] = useState<ReadonlyMap<NodeId, Size>>(() => new Map());
-  const boxes = useMemo(() => layoutMap(doc, defaultMeasurer, sizes, doc.designPreset), [doc, sizes]);
+  const [focusPositions, setFocusPositions] = useState<ReadonlyMap<NodeId, XYPosition>>(() => new Map());
+  const boxes = useMemo(() => {
+    const layout = layoutMap(doc, defaultMeasurer, sizes, doc.designPreset);
+    if (!focusToday) return layout;
+    const focused = focusTodayLayout(doc, layout);
+    for (const [id, position] of focusPositions) {
+      const box = focused.get(id);
+      if (box) focused.set(id, { ...box, ...position });
+    }
+    return focused;
+  }, [doc, focusToday, focusPositions, sizes]);
   const flow = useMemo(() => toFlow(doc, boxes, sizes), [doc, boxes, sizes]);
   const [nodes, setNodes] = useState(flow.nodes);
   const drag = useRef<{ ids: Set<NodeId> } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
 
   useEffect(() => { publishCurrentLayout(doc.id, Array.from(boxes.values())); }, [doc.id, boxes]);
+  useEffect(() => {
+    if (!focusToday) setFocusPositions(new Map());
+  }, [focusToday]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => { void fitView({ padding: 0.2, maxZoom: 1 }); });
+    return () => cancelAnimationFrame(frame);
+  }, [focusToday, fitView]);
 
   useEffect(() => {
     const root = document.querySelector('.react-flow');
@@ -233,18 +251,40 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
           const box = boxes.get(id);
           if (box) positions[id] = { x: box.x + dx + translateX, y: box.y + dy };
         }
-        moveNode(node.id, target, targetLeft ? 'left' : 'right', positions);
+        // Focus coordinates are a temporary view. Reparenting changes the tree,
+        // while its temporary placement remains in focusPositions until reset.
+        moveNode(node.id, target, targetLeft ? 'left' : 'right', focusToday ? undefined : positions);
+        if (focusToday) setFocusPositions((previous) => {
+          const next = new Map(previous);
+          for (const [id, position] of Object.entries(positions)) next.set(id, position);
+          return next;
+        });
       } else {
         const positions: Record<NodeId, XYPosition> = {};
         for (const id of ids) { const b = boxes.get(id); if (b) positions[id] = { x: b.x + dx, y: b.y + dy }; }
-        const parentId = doc.nodes[node.id].parentId;
-        const parent = parentId ? boxes.get(parentId) : undefined;
-        const nodeSide = parent && node.position.x + origin.width / 2 < parent.x + parent.width / 2 ? 'left' : 'right';
-        setPositions(positions, parentId ? { id: node.id, side: nodeSide } : undefined);
+          if (focusToday) {
+          // Keep the user's drag and subtree together, nudging the whole group
+          // down only when needed to avoid overlapping stationary nodes.
+          const moving = new Set(ids);
+          let dy = 0;
+          const collides = (offset: number) => Object.entries(positions).some(([id, p]) => {
+            const box = boxes.get(id)!;
+            const candidate = { x: p.x, y: p.y + offset, width: box.width, height: box.height };
+            return [...boxes.values()].some((other) => !moving.has(other.id) && candidate.x < other.x + other.width && other.x < candidate.x + candidate.width && candidate.y < other.y + other.height && other.y < candidate.y + candidate.height);
+          });
+          while (collides(dy) && dy < 4000) dy += 12;
+          const adjusted = Object.fromEntries(Object.entries(positions).map(([id, p]) => [id, { x: p.x, y: p.y + dy }])) as Record<NodeId, XYPosition>;
+          setFocusPositions((previous) => new Map([...previous, ...Object.entries(adjusted)]));
+        } else {
+          const parentId = doc.nodes[node.id].parentId;
+          const parent = parentId ? boxes.get(parentId) : undefined;
+          const nodeSide = parent && node.position.x + origin.width / 2 < parent.x + parent.width / 2 ? 'left' : 'right';
+          setPositions(positions, parentId ? { id: node.id, side: nodeSide } : undefined);
+        }
       }
       select(node.id);
     },
-    [boxes, doc, flow.nodes, screenToFlowPosition],
+    [boxes, doc, flow.nodes, focusToday, screenToFlowPosition],
   );
 
   return (
