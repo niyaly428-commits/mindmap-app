@@ -151,19 +151,19 @@ button {
 .editor-page { background:var(--bg); }
 .preset-soft-organic .editor-canvas { background:#fbf8f2; }
 .preset-soft-organic .topic { border-radius:24px; padding:10px 17px; box-shadow:0 4px 14px #435a7612; }
-.preset-soft-organic .topic-root { color:#263f67; background:#dceafe; border-color:#b8d0f5; border-radius:28px; }
+.preset-soft-organic .topic-root { color:var(--text); background:color-mix(in srgb,var(--branch) 14%,#fff); border-color:color-mix(in srgb,var(--branch) 36%,#fff); border-radius:28px; }
 .preset-soft-organic .topic-main { border:0; border-radius:999px; padding:10px 16px; box-shadow:0 3px 10px #274b7218; }
 .preset-soft-organic .topic-sub { border-radius:18px; padding:7px 12px; background:color-mix(in srgb,var(--branch) 10%,#fff); border-color:color-mix(in srgb,var(--branch) 15%,transparent); }
 .preset-soft-organic .react-flow__edge path { stroke-linecap:round; }
 .preset-clean-structured .editor-canvas { background:#f5f8fc; }
 .preset-clean-structured .topic { border-radius:5px; padding:7px 11px; box-shadow:none; }
-.preset-clean-structured .topic-root { color:#fff; background:#34445c; border-color:#34445c; border-radius:7px; }
+.preset-clean-structured .topic-root { color:#fff; background:var(--branch); border-color:var(--branch); border-radius:7px; }
 .preset-clean-structured .topic-main { color:#28364a; background:color-mix(in srgb,var(--branch) 16%,#fff); border:0; border-left:3px solid var(--branch); border-radius:4px; }
 .preset-clean-structured .topic-sub { color:#34445c; background:#edf1f6; border:1px solid #e1e7ef; border-radius:4px; }
 .preset-clean-structured .react-flow__edge path { stroke-linecap:square; }
 .preset-soft-analytical .editor-canvas { background:#f2f5fb; }
 .preset-soft-analytical .topic { border-radius:13px; padding:8px 12px; box-shadow:0 3px 12px #33415512; }
-.preset-soft-analytical .topic-root { color:#fff; background:linear-gradient(135deg,#385980,#587ba4); border-color:#385980; border-radius:13px; box-shadow:0 5px 16px #304b6d2b; }
+.preset-soft-analytical .topic-root { color:#fff; background:linear-gradient(135deg,color-mix(in srgb,var(--branch) 72%,#fff),var(--branch)); border-color:var(--branch); border-radius:13px; box-shadow:0 5px 16px #304b6d2b; }
 .preset-soft-analytical .topic-main { color:#263b54; background:color-mix(in srgb,var(--branch) 13%,#fff); border:1px solid color-mix(in srgb,var(--branch) 25%,#fff); border-radius:17px; }
 .preset-soft-analytical .topic-sub { background:#fff; border-color:#e5eaf2; border-radius:9px; box-shadow:0 2px 8px #3341550c; }
 .preset-soft-analytical .react-flow__edge path { stroke-linecap:round; }
@@ -355,6 +355,18 @@ button {
   color: #1c64d6;
 }
 .topic .text-orange {
+  color: #e8590c;
+}
+.topic-root .has-color {
+  color: #1f2328;
+}
+.topic-root .has-color.text-red {
+  color: #e03131;
+}
+.topic-root .has-color.text-blue {
+  color: #1c64d6;
+}
+.topic-root .has-color.text-orange {
   color: #e8590c;
 }
 /* Filled main topics: colored text sits on a white chip so it stays readable. */

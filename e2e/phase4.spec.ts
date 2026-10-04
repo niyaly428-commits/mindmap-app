@@ -83,7 +83,7 @@ test('rectangle selection enables bulk edits, undo and delete', async ({ page })
   expect(ar).not.toBeNull(); expect(br).not.toBeNull();
   const left = Math.min(ar!.x, br!.x) - 15; const top = Math.min(ar!.y, br!.y) - 15;
   const right = Math.max(ar!.x + ar!.width, br!.x + br!.width) + 15; const bottom = Math.max(ar!.y + ar!.height, br!.y + br!.height) + 15;
-  await page.mouse.move(left, top); await page.mouse.down(); await page.mouse.move(right, bottom, { steps: 8 }); await page.mouse.up();
+  await page.keyboard.down('Shift'); await page.mouse.move(left, top); await page.mouse.down(); await page.mouse.move(right, bottom, { steps: 8 }); await page.mouse.up(); await page.keyboard.up('Shift');
   await expect(page.getByText('2件選択')).toBeVisible();
   await page.getByLabel('一括ステータス').selectOption('waiting');
   await expect(a.getByRole('checkbox')).toHaveAttribute('title', '待ち');
@@ -161,7 +161,7 @@ test('right click keeps a rectangle selection and routine toggles every selected
   const ar = await a.boundingBox(); const br = await b.boundingBox();
   const left = Math.min(ar!.x, br!.x) - 15; const top = Math.min(ar!.y, br!.y) - 15;
   const right = Math.max(ar!.x + ar!.width, br!.x + br!.width) + 15; const bottom = Math.max(ar!.y + ar!.height, br!.y + br!.height) + 15;
-  await page.mouse.move(left, top); await page.mouse.down(); await page.mouse.move(right, bottom, { steps: 8 }); await page.mouse.up();
+  await page.keyboard.down('Shift'); await page.mouse.move(left, top); await page.mouse.down(); await page.mouse.move(right, bottom, { steps: 8 }); await page.mouse.up(); await page.keyboard.up('Shift');
   await a.click({ button: 'right' });
   await expect(page.getByText('2件選択')).toBeVisible();
   await page.locator('.menu-sub > button').click();
@@ -236,7 +236,7 @@ test('dragging a task moves it, reparenting updates its connector, and pane sele
   const left = Math.min(aBox!.x, bBox!.x, childBox!.x) - 12; const top = Math.min(aBox!.y, bBox!.y, childBox!.y) - 12;
   const right = Math.max(aBox!.x + aBox!.width, bBox!.x + bBox!.width, childBox!.x + childBox!.width) + 12;
   const bottom = Math.max(aBox!.y + aBox!.height, bBox!.y + bBox!.height, childBox!.y + childBox!.height) + 12;
-  await page.mouse.move(left, top); await page.mouse.down(); await page.mouse.move(right, bottom, { steps: 8 }); await page.mouse.up();
+  await page.keyboard.down('Shift'); await page.mouse.move(left, top); await page.mouse.down(); await page.mouse.move(right, bottom, { steps: 8 }); await page.mouse.up(); await page.keyboard.up('Shift');
   await expect(page.getByText('3件選択')).toBeVisible();
 });
 
@@ -266,7 +266,7 @@ test('bulk due dates update every selected topic and undo/redo as one edit', asy
   const ar = await a.boundingBox(); const br = await b.boundingBox();
   const left = Math.min(ar!.x, br!.x) - 15; const top = Math.min(ar!.y, br!.y) - 15;
   const right = Math.max(ar!.x + ar!.width, br!.x + br!.width) + 15; const bottom = Math.max(ar!.y + ar!.height, br!.y + br!.height) + 15;
-  await page.mouse.move(left, top); await page.mouse.down(); await page.mouse.move(right, bottom, { steps: 8 }); await page.mouse.up();
+  await page.keyboard.down('Shift'); await page.mouse.move(left, top); await page.mouse.down(); await page.mouse.move(right, bottom, { steps: 8 }); await page.mouse.up(); await page.keyboard.up('Shift');
   await a.click({ button: 'right' });
   await page.locator('.context-menu[role="menu"] > .menu-item').nth(2).click();
   const dueDate = await page.evaluate(() => {

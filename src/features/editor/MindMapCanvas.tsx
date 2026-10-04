@@ -149,7 +149,9 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
     let start: { x: number; y: number } | null = null;
     const down = (event: PointerEvent) => {
       const target = event.target as Element;
-      if (event.button !== 0 || !target.closest('.react-flow__pane') || target.closest('.react-flow__node')) return;
+      // Plain left-drag on the pane is owned by React Flow (canvas pan).
+      // Keep the existing range-selection gesture available with Shift+drag.
+      if (event.button !== 0 || !event.shiftKey || !target.closest('.react-flow__pane') || target.closest('.react-flow__node')) return;
       start = { x: event.clientX, y: event.clientY };
       event.preventDefault(); event.stopPropagation();
       // Capture only gestures that began on blank canvas; node drags remain owned by React Flow.
@@ -315,6 +317,7 @@ export function MindMapCanvas({ doc }: { doc: MindMapDoc }) {
       selectionKeyCode={null}
       multiSelectionKeyCode={null}
       panActivationKeyCode={null}
+      panOnDrag
       zoomOnDoubleClick={false}
       panOnScroll
       panOnScrollMode={PanOnScrollMode.Vertical}

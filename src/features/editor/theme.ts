@@ -6,7 +6,8 @@ const PALETTES: Record<string, string[]> = {
   monochrome: ['#647488', '#aab4c2', '#46566d', '#1f2937', '#cbd5e1'],
 };
 
-export const ROOT_COLOR = '#2f3441';
-
-export const branchColor = (branch: number, theme = 'calm-blue'): string =>
-  branch < 0 ? ROOT_COLOR : (PALETTES[theme] ?? PALETTES['calm-blue'])[branch % (PALETTES[theme] ?? PALETTES['calm-blue']).length];
+export const branchColor = (branch: number, theme = 'calm-blue'): string => {
+  const palette = PALETTES[theme] ?? PALETTES['calm-blue'];
+  // Keep the root visually distinct while sourcing its color from the active theme.
+  return branch < 0 ? palette[3] : palette[branch % palette.length];
+};
