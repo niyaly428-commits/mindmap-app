@@ -75,13 +75,14 @@ describe('editorStore', () => {
     s().addChild();
     const id = s().selectedId!;
     s().setStatus(id, 'waiting');
-    s().setAttributes(id, { note: 'n', dueDate: '2026-10-03', textColor: 'blue' });
+    s().setAttributes(id, { note: 'n', dueDate: '2026-10-03', textColor: 'blue', backgroundColor: 'green' });
     s().toggleBold(id);
-    expect(s().doc!.nodes[id]).toMatchObject({ status: 'waiting', note: 'n', dueDate: '2026-10-03', bold: true });
+    expect(s().doc!.nodes[id]).toMatchObject({ status: 'waiting', note: 'n', dueDate: '2026-10-03', bold: true, backgroundColor: 'green' });
     s().undo();
     expect(s().doc!.nodes[id].bold).toBeUndefined();
     s().undo();
     expect(s().doc!.nodes[id].note).toBeUndefined();
+    expect(s().doc!.nodes[id].backgroundColor).toBeUndefined();
     s().undo();
     expect(s().doc!.nodes[id].status).toBeUndefined();
     s().redo();
@@ -115,7 +116,7 @@ describe('editorStore', () => {
     s().setColorTheme('natural');
     expect(s().doc).toMatchObject({ designPreset: 'soft-analytical', colorTheme: 'natural' });
     s().undo(); expect(s().doc!.colorTheme).toBeUndefined();
-    s().undo(); expect(s().doc!.designPreset).toBeUndefined();
+    s().undo(); expect(s().doc!.designPreset).toBe('clean-structured');
   });
 
   it('applies bulk edits as one undoable operation', () => {
@@ -130,6 +131,67 @@ describe('editorStore', () => {
     s().setSelection([a, b]); s().bulkDelete();
     expect(s().doc!.nodes[a]).toBeUndefined(); expect(s().doc!.nodes[b]).toBeUndefined();
     s().undo(); expect(s().doc!.nodes[a]).toBeDefined(); expect(s().doc!.nodes[b]).toBeDefined();
+  });
+
+  it('applies bulk text color and bold changes in one undo step', () => {
+    s().addChild(); const first = s().selectedId!;
+    s().addSibling(first); const second = s().selectedId!;
+    s().setSelection([first, second]);
+    const history = s().past.length;
+    s().bulkSetColor('blue');
+    expect(s().doc!.nodes[first].textColor).toBe('blue');
+    expect(s().doc!.nodes[second].textColor).toBe('blue');
+    expect(s().past).toHaveLength(history + 1);
+    s().undo();
+    s().bulkToggleBold();
+    expect(s().doc!.nodes[first].bold).toBe(true);
+    expect(s().doc!.nodes[second].bold).toBe(true);
+    expect(s().past).toHaveLength(history + 1);
+    s().undo();
+    expect(s().doc!.nodes[first].bold).toBeUndefined();
+    expect(s().doc!.nodes[second].bold).toBeUndefined();
+  });
+
+  it('sets and clears a persistent background color on all selected nodes in one undo step', () => {
+    s().addChild(); const first = s().selectedId!;
+    s().addSibling(first); const second = s().selectedId!;
+    s().setSelection([first, second]);
+    const history = s().past.length;
+    s().bulkSetBackgroundColor('pink');
+    expect(s().doc!.nodes[first].backgroundColor).toBe('pink');
+    expect(s().doc!.nodes[second].backgroundColor).toBe('pink');
+    expect(s().past).toHaveLength(history + 1);
+    s().undo();
+    expect(s().doc!.nodes[first].backgroundColor).toBeUndefined();
+    expect(s().doc!.nodes[second].backgroundColor).toBeUndefined();
+    s().redo();
+    expect(s().doc!.nodes[first].backgroundColor).toBe('pink');
+    s().bulkSetBackgroundColor(undefined);
+    expect(s().doc!.nodes[first].backgroundColor).toBeUndefined();
+    expect(s().doc!.nodes[second].backgroundColor).toBeUndefined();
+    s().undo();
+    expect(s().doc!.nodes[first].backgroundColor).toBe('pink');
+    expect(s().doc!.nodes[second].backgroundColor).toBe('pink');
+    s().redo();
+    expect(s().doc!.nodes[first].backgroundColor).toBeUndefined();
+    expect(s().doc!.nodes[second].backgroundColor).toBeUndefined();
+  });
+
+  it('deletes selected ancestors only and restores all selected subtrees in one undo', () => {
+    s().addChild(); const parent = s().selectedId!;
+    s().addChild(parent); const child = s().selectedId!;
+    s().addSibling(parent); const sibling = s().selectedId!;
+    s().setSelection([parent, child, sibling]);
+    const history = s().past.length;
+    s().bulkDelete();
+    expect(s().doc!.nodes[parent]).toBeUndefined();
+    expect(s().doc!.nodes[child]).toBeUndefined();
+    expect(s().doc!.nodes[sibling]).toBeUndefined();
+    expect(s().past).toHaveLength(history + 1);
+    s().undo();
+    expect(s().doc!.nodes[parent]).toBeDefined();
+    expect(s().doc!.nodes[child]).toBeDefined();
+    expect(s().doc!.nodes[sibling]).toBeDefined();
   });
 
   it('applies one bulk status change to every selected task in one undo and redo step', () => {

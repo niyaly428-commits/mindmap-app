@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { useEditorStore } from '../../store/editorStore';
 import { formatDue, taskDueState } from '../../lib/date';
-import type { DisplayStatus, TextColor } from '../../model/types';
+import type { DisplayStatus, TaskBackgroundColor, TextColor } from '../../model/types';
 import { useDragStore } from './dragStore';
-import { CalendarIcon, LinkIcon, NoteIcon, STATUS_LABELS, StatusIcon, TEXT_COLORS } from './icons';
+import { CalendarIcon, LinkIcon, NoteIcon, STATUS_LABELS, StatusIcon, TASK_BACKGROUND_COLORS, TEXT_COLORS } from './icons';
 import { openPopover } from './popoverStore';
 import { StatusOptions } from './Popovers';
 import { mapRepository } from '../../db/mapRepository';
+import { topicBackgroundClass } from './topicStyles';
 
 export type TopicNodeData = {
   text: string;
@@ -22,6 +23,7 @@ export type TopicNodeData = {
   dueDate?: string;
   bold?: boolean;
   textColor?: TextColor;
+  backgroundColor?: TaskBackgroundColor;
   routine?: boolean;
   branch?: number;
   images?: string[];
@@ -68,6 +70,7 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
     due && due !== 'upcoming' && 'has-due',
     due && `due-${due}`,
     data.routine && 'is-routine',
+    topicBackgroundClass(data.backgroundColor),
     selectedMany && 'is-multi-selected',
   ]
     .filter(Boolean)
@@ -100,7 +103,7 @@ function TopicNodeView({ id, data }: NodeProps<TopicNodeType>) {
       {data.routine && <span className="routine-mark" title="Routine">↻</span>}
       {editing ? (
         <>
-          <EditToolbar id={id} bold={!!data.bold} textColor={data.textColor} />
+          <EditToolbar id={id} bold={!!data.bold} textColor={data.textColor} backgroundColor={data.backgroundColor} />
           <TopicEditor id={id} initial={data.text} isRoot={data.depth === 0} className={textClass} />
         </>
       ) : (
@@ -237,7 +240,7 @@ function StatusControl({ id, status }: { id: string; status: DisplayStatus }) {
 }
 
 /** Mini toolbar shown above a topic while editing its text: bold + 4 text colors. */
-function EditToolbar({ id, bold, textColor }: { id: string; bold: boolean; textColor?: TextColor }) {
+function EditToolbar({ id, bold, textColor, backgroundColor }: { id: string; bold: boolean; textColor?: TextColor; backgroundColor?: TaskBackgroundColor }) {
   const { toggleBold, setAttributes } = useEditorStore.getState();
   const keepFocus = (e: { preventDefault: () => void; stopPropagation: () => void }) => {
     e.preventDefault();
@@ -248,8 +251,10 @@ function EditToolbar({ id, bold, textColor }: { id: string; bold: boolean; textC
       <TextStyleButtons
         bold={bold}
         textColor={textColor}
+        backgroundColor={backgroundColor}
         onBold={() => toggleBold(id)}
         onColor={(c) => setAttributes(id, { textColor: c })}
+        onBackground={(c) => setAttributes(id, { backgroundColor: c })}
       />
     </div>
   );
@@ -258,15 +263,19 @@ function EditToolbar({ id, bold, textColor }: { id: string; bold: boolean; textC
 export function TextStyleButtons({
   bold,
   textColor,
+  backgroundColor,
   disabled,
   onBold,
   onColor,
+  onBackground,
 }: {
   bold: boolean;
   textColor?: TextColor;
+  backgroundColor?: TaskBackgroundColor;
   disabled?: boolean;
   onBold: () => void;
   onColor: (c: TextColor) => void;
+  onBackground: (c: TaskBackgroundColor | undefined) => void;
 }) {
   const current = textColor ?? 'black';
   return (
@@ -296,6 +305,32 @@ export function TextStyleButtons({
           <span className="color-dot" style={{ background: c.css }} />
         </button>
       ))}
+      <span className="style-separator" aria-hidden="true" />
+      {TASK_BACKGROUND_COLORS.map((c) => (
+        <button
+          key={c.value}
+          className={`style-btn background-color-btn${backgroundColor === c.value ? ' is-active' : ''}`}
+          aria-label={`背景色: ${c.label}`}
+          aria-pressed={backgroundColor === c.value}
+          title={`背景色: ${c.label}`}
+          disabled={disabled}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onBackground(c.value)}
+        >
+          <span className={`background-color-dot task-bg-${c.value}`} />
+        </button>
+      ))}
+      <button
+        className={`style-btn background-clear-btn${!backgroundColor && !disabled ? ' is-active' : ''}`}
+        aria-label="背景色を解除"
+        aria-pressed={!backgroundColor}
+        title="背景色を解除"
+        disabled={disabled}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onBackground(undefined)}
+      >
+        ×
+      </button>
     </>
   );
 }

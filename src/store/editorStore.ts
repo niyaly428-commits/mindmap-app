@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as tree from '../model/tree';
-import type { ColorTheme, DesignPreset, DisplayStatus, MindMapDoc, NodeId, Side, TextColor } from '../model/types';
+import type { ColorTheme, DesignPreset, DisplayStatus, MindMapDoc, NodeId, Side, TaskBackgroundColor, TextColor } from '../model/types';
 
 const HISTORY_LIMIT = 200;
 
@@ -32,6 +32,8 @@ interface EditorState {
   setColorTheme: (value: ColorTheme) => void;
   setSelection: (ids: NodeId[]) => void;
   bulkSetColor: (value: TextColor) => void;
+  bulkSetBackgroundColor: (value: TaskBackgroundColor | undefined) => void;
+  bulkToggleBold: () => void;
   bulkSetStatus: (value: DisplayStatus) => void;
   bulkSetDueDate: (value: string | undefined) => void;
   bulkSetRoutine: (value: boolean) => void;
@@ -173,6 +175,19 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       const { doc, selectedIds } = get(); if (!doc) return;
       let next = doc; for (const id of selectedIds.filter((id) => id !== doc.rootId)) next = tree.setAttributes(next, id, { textColor: value }); commit(next);
     },
+    bulkSetBackgroundColor: (value) => {
+      const { doc, selectedIds } = get(); if (!doc) return;
+      let next = doc;
+      for (const id of selectedIds.filter((id) => id !== doc.rootId && !!doc.nodes[id])) next = tree.setAttributes(next, id, { backgroundColor: value });
+      commit(next);
+    },
+    bulkToggleBold: () => {
+      const { doc, selectedIds } = get(); if (!doc) return;
+      const ids = selectedIds.filter((id) => id !== doc.rootId && !!doc.nodes[id]);
+      if (!ids.length) return;
+      const value = !ids.every((id) => !!doc.nodes[id].bold);
+      let next = doc; for (const id of ids) next = tree.setAttributes(next, id, { bold: value }); commit(next);
+    },
     bulkSetStatus: (value) => {
       const { doc, selectedIds } = get(); if (!doc) return;
       let next = doc; for (const id of selectedIds.filter((id) => id !== doc.rootId)) next = tree.setStatus(next, id, value); commit(next);
@@ -209,6 +224,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     toggleBold: (id) => {
       const { doc } = get();
       const t = target(id);
+      if (id === undefined && get().selectedIds.length > 1) return get().bulkToggleBold();
       if (doc && t && doc.nodes[t]) commit(tree.setAttributes(doc, t, { bold: !doc.nodes[t].bold }));
     },
     endCoalesce: () => {

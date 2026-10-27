@@ -3,7 +3,7 @@ import { chooseStatus, statusOf, topic, typeTopic } from './helpers';
 
 test('create, edit, check, undo, persist, rename and delete a map', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '＋ 新規作成' }).click();
+  await page.getByRole('button', { name: '今日のマップを開く／作成' }).click();
   await expect(page).toHaveURL(/#\/maps\//);
   await expect(page.locator('.topic-root')).toBeVisible();
 
@@ -71,7 +71,7 @@ test('create, edit, check, undo, persist, rename and delete a map', async ({ pag
 
 test('drag a topic onto another topic to re-parent it', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '＋ 新規作成' }).click();
+  await page.getByRole('button', { name: '今日のマップを開く／作成' }).click();
   await expect(page.locator('.topic-root')).toBeVisible();
   await page.keyboard.press('Tab');
   await typeTopic(page, 'A');

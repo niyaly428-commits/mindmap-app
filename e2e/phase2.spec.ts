@@ -183,7 +183,7 @@ test('create the next day map carrying over unfinished main topics', async ({ pa
 
   await page.waitForTimeout(600);
   await page.getByRole('button', { name: '← 一覧' }).click();
-  await page.locator('.card', { hasText: 'タスク_9月29日' }).getByRole('button', { name: '次の日のタスクを作成' }).click();
+  await page.locator('.card', { hasText: 'タスク_9月29日' }).getByRole('button', { name: '次の日を作成' }).click();
   const nextCard = page.locator('.card', { hasText: 'タスク_9月30日' });
   await expect(nextCard).toBeVisible();
 

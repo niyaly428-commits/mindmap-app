@@ -70,6 +70,7 @@ function toFlow(
         dueDate: node.dueDate,
         bold: node.bold,
         textColor: node.textColor,
+        backgroundColor: node.backgroundColor,
         routine: node.routine,
         branch: box.branch,
         images: node.images,

@@ -16,7 +16,7 @@ export async function typeTopic(page: Page, text: string) {
 
 export async function newMap(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: '＋ 新規作成' }).click();
+  await page.getByRole('button', { name: '今日のマップを開く／作成' }).click();
   await expect(page.locator('.topic-root')).toBeVisible();
 }
 

@@ -61,13 +61,13 @@ describe('tree operations', () => {
     expect(syncRootWithTitle(doc)).toBe(doc);
   });
 
-  it('sets and clears optional attributes (note / link / due date / bold / color)', () => {
+  it('sets and clears optional attributes (note / link / due date / bold / colors)', () => {
     const { doc, a } = sample();
-    const attrs = { note: 'memo', link: 'https://x.dev', dueDate: '2026-10-03', bold: true, textColor: 'red' } as const;
+    const attrs = { note: 'memo', link: 'https://x.dev', dueDate: '2026-10-03', bold: true, textColor: 'red', backgroundColor: 'yellow' } as const;
     const next = setAttributes(doc, a, attrs);
     expect(next.nodes[a]).toMatchObject(attrs);
     expect(setAttributes(next, a, { note: 'memo' })).toBe(next);
-    const cleared = setAttributes(next, a, { note: '', link: undefined, dueDate: undefined, bold: false, textColor: 'black' });
+    const cleared = setAttributes(next, a, { note: '', link: undefined, dueDate: undefined, bold: false, textColor: 'black', backgroundColor: undefined });
     for (const k of Object.keys(attrs)) expect(k in cleared.nodes[a]).toBe(false);
   });
 

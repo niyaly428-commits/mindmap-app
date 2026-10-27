@@ -1,4 +1,4 @@
-import type { DisplayStatus, TextColor } from '../../model/types';
+import type { DisplayStatus, TaskBackgroundColor, TextColor } from '../../model/types';
 
 export const STATUS_LABELS: Record<DisplayStatus, string> = {
   todo: '未着手',
@@ -14,6 +14,14 @@ export const TEXT_COLORS: { value: TextColor; label: string; css: string }[] = [
   { value: 'red', label: '赤', css: '#e03131' },
   { value: 'blue', label: '青', css: '#1c64d6' },
   { value: 'orange', label: 'オレンジ', css: '#e8590c' },
+];
+
+export const TASK_BACKGROUND_COLORS: { value: TaskBackgroundColor; label: string; css: string }[] = [
+  { value: 'yellow', label: '黄', css: '#f2c94c' },
+  { value: 'green', label: '緑', css: '#68b684' },
+  { value: 'blue', label: '青', css: '#69a8dc' },
+  { value: 'pink', label: '桃', css: '#df8cac' },
+  { value: 'purple', label: '紫', css: '#a28bd4' },
 ];
 
 /** One icon that is both the status and the completion checkbox (完了 = checked box). */

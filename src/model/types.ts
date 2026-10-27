@@ -10,6 +10,7 @@ export type DisplayStatus = TaskStatus | 'done';
 
 /** Topic text colors; undefined = default (black / white on filled main topics). */
 export type TextColor = 'black' | 'red' | 'blue' | 'orange';
+export type TaskBackgroundColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple';
 export type DesignPreset = 'soft-organic' | 'clean-structured' | 'soft-analytical';
 export type ColorTheme = 'calm-blue' | 'natural' | 'elegant' | 'fresh' | 'monochrome';
 
@@ -38,6 +39,8 @@ export interface MindNode {
   dueDate?: string;
   bold?: boolean;
   textColor?: TextColor;
+  /** Persistent task highlight; omitted on existing maps to preserve their current appearance. */
+  backgroundColor?: TaskBackgroundColor;
   priority?: 1 | 2 | 3;
   tags?: string[];
   /** Reference to a Blob stored in the `assets` table (future). */
@@ -58,6 +61,10 @@ export interface MindMapDoc {
   updatedAt: number;
   designPreset?: DesignPreset;
   colorTheme?: ColorTheme;
+  /** Calendar day represented by this daily map (local date, YYYY-MM-DD). */
+  mapDate?: string;
+  /** User editable daily report draft; saved outside editor undo history. */
+  dailyReport?: string;
 }
 
 export interface MindMapSummary {
@@ -65,4 +72,5 @@ export interface MindMapSummary {
   title: string;
   createdAt: number;
   updatedAt: number;
+  mapDate?: string;
 }

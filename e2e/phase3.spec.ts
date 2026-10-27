@@ -142,7 +142,7 @@ test('next-day copy keeps status, memo, link, due date and text style', async ({
 
   await page.waitForTimeout(600);
   await page.getByRole('button', { name: '← 一覧' }).click();
-  await page.locator('.card', { hasText: 'タスク_9月29日' }).getByRole('button', { name: '次の日のタスクを作成' }).click();
+  await page.locator('.card', { hasText: 'タスク_9月29日' }).getByRole('button', { name: '次の日を作成' }).click();
   await page.locator('.card', { hasText: 'タスク_9月30日' }).locator('.card-body').click();
 
   const copied = topic(page, '外注');

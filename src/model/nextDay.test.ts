@@ -126,7 +126,7 @@ describe('createNextDayMap', () => {
     const copied = next.nodes[next.rootId].children.map((id) => next.nodes[id]);
     expect(copied.map((n) => n.text)).toEqual(['Every day']);
     expect(copied[0].routine).toBe(true);
-    expect(copied[0].checked).toBe(true);
+    expect(copied[0].checked).toBe(false);
   });
 
   it('keeps a routine descendant even inside an otherwise completed main branch', () => {
@@ -138,6 +138,19 @@ describe('createNextDayMap', () => {
     const main = next.nodes[next.rootId].children.map((id) => next.nodes[id]);
     expect(main.map((n) => n.text)).toEqual(['Finished branch']);
     const copiedRoutine = next.nodes[main[0].children[0]];
-    expect(copiedRoutine).toMatchObject({ text: 'Daily check', routine: true });
+    expect(copiedRoutine).toMatchObject({ text: 'Daily check', routine: true, checked: false });
+    expect(next.nodes[main[0].id].checked).toBe(false);
+  });
+
+  it('reopens completed routine descendants while preserving the rest of the copied properties', () => {
+    let source = createMap('Routine descendant');
+    const branch = addChild(source, source.rootId, 'Branch'); source = branch.doc;
+    const daily = addChild(source, branch.id, 'Daily check'); source = setAttributes(daily.doc, daily.id, { routine: true, note: 'Keep this note', link: 'https://example.com' });
+    source = setStatus(source, daily.id, 'done');
+    const next = createNextDayMap(source);
+    const copiedBranch = next.nodes[next.rootId].children[0];
+    const copiedDaily = next.nodes[copiedBranch].children[0];
+    expect(next.nodes[copiedBranch].checked).toBe(false);
+    expect(next.nodes[copiedDaily]).toMatchObject({ checked: false, routine: true, note: 'Keep this note', link: 'https://example.com' });
   });
 });

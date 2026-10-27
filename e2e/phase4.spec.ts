@@ -17,11 +17,13 @@ test('the three presets change node and connector structure while themes stay in
   await newMap(page);
   await page.keyboard.press('Tab'); await typeTopic(page, 'Design branch');
   const node = topic(page, 'Design branch');
-  const organicPath = await page.locator('.react-flow__edge path').first().getAttribute('d');
-  await page.getByLabel('Design preset').selectOption('clean-structured');
-  await expect(page.locator('.react-flow__edge path').first()).not.toHaveAttribute('d', organicPath!);
+  const edge = page.locator('.react-flow__edge path').first();
+  const cleanWidth = await edge.evaluate((element) => getComputedStyle(element).strokeWidth);
   await expect(node).toHaveCSS('border-radius', '4px');
   await expect(page.getByLabel('Color theme')).toHaveValue('calm-blue');
+  await page.getByLabel('Design preset').selectOption('soft-organic');
+  const organicWidth = await edge.evaluate((element) => getComputedStyle(element).strokeWidth);
+  expect(organicWidth).not.toBe(cleanWidth);
   await page.getByLabel('Design preset').selectOption('soft-analytical');
   await expect(node.locator('.topic-section-number')).toHaveText('1');
   await expect(page.getByLabel('Color theme')).toHaveValue('calm-blue');
@@ -114,7 +116,7 @@ test('PDF output opens a print-ready landscape document with the map hierarchy',
   const popupPromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'PDF出力' }).click();
   const popup = await popupPromise;
-  await expect(popup.locator('h1')).toContainText('無題のマインドマップ');
+  await expect(popup.locator('h1')).toHaveText(await page.getByLabel('マップのタイトル').inputValue());
   await expect(popup.locator('body')).toContainText('PDF child');
   await expect(popup.locator('.mindmap-connectors path')).toHaveCount(1);
   await expect(popup.locator('.mindmap-connectors path')).toHaveAttribute('d', /H/);
@@ -126,16 +128,16 @@ test('PDF output opens a print-ready landscape document with the map hierarchy',
 test('long maps keep all nodes and receive readable branch detail sheets', async ({ page }) => {
   await newMap(page);
   await page.keyboard.press('Tab'); await typeTopic(page, 'Section 1');
-  for (let index = 2; index <= 24; index++) {
+  for (let index = 2; index <= 50; index++) {
     await page.keyboard.press('Enter'); await typeTopic(page, `Section ${index}`);
   }
   const popupPromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'PDF出力' }).click();
   const popup = await popupPromise;
   expect(await popup.locator('.mindmap-sheet').count()).toBeGreaterThan(1);
-  await expect(popup.locator('.mindmap-sheet').first().locator('.mindmap-node')).toHaveCount(25);
-  await expect(popup.locator('.mindmap-sheet').first().locator('.mindmap-connectors path')).toHaveCount(24);
-  expect(await popup.locator('.mindmap-node[data-node-id]').evaluateAll((els) => new Set(els.map((el) => el.getAttribute('data-node-id'))).size)).toBe(25);
+  await expect(popup.locator('.mindmap-sheet').first().locator('.mindmap-node')).toHaveCount(51);
+  await expect(popup.locator('.mindmap-sheet').first().locator('.mindmap-connectors path')).toHaveCount(50);
+  expect(await popup.locator('.mindmap-node[data-node-id]').evaluateAll((els) => new Set(els.map((el) => el.getAttribute('data-node-id'))).size)).toBe(51);
 });
 
 test('oversized image preview fits the viewport without changing aspect ratio', async ({ page }) => {
@@ -240,7 +242,7 @@ test('dragging a task moves it, reparenting updates its connector, and pane sele
   await expect(page.getByText('3件選択')).toBeVisible();
 });
 
-test('completed routine tasks are carried into the next map with their routine marker', async ({ page }) => {
+test('completed routine tasks are carried into the next map unfinished with their routine marker', async ({ page }) => {
   await newMap(page);
   await page.getByLabel('マップのタイトル').fill('Routine_9/29');
   await page.getByLabel('マップのタイトル').press('Enter');
@@ -252,10 +254,10 @@ test('completed routine tasks are carried into the next map with their routine m
   await expect(node).toHaveClass(/is-routine/);
   await page.waitForTimeout(500);
   await page.getByRole('button', { name: '← 一覧' }).click();
-  await page.locator('.card', { hasText: 'Routine_9/29' }).getByRole('button', { name: '次の日のタスクを作成' }).click();
+  await page.locator('.card', { hasText: 'Routine_9/29' }).getByRole('button', { name: '次の日を作成' }).click();
   await page.locator('.card', { hasText: 'Routine_9/30' }).locator('.card-body').click();
   await expect(topic(page, 'Daily review')).toHaveClass(/is-routine/);
-  await expect(topic(page, 'Daily review').getByRole('checkbox')).toBeChecked();
+  await expect(topic(page, 'Daily review').getByRole('checkbox')).not.toBeChecked();
 });
 
 test('bulk due dates update every selected topic and undo/redo as one edit', async ({ page }) => {

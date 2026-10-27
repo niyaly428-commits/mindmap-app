@@ -78,6 +78,7 @@ export function handleKeyboardShortcut(e: KeyboardEvent) {
         case 'Delete':
         case 'Backspace':
           e.preventDefault();
+          if (s.selectedIds.length > 1) return s.bulkDelete();
           return s.deleteNode(id);
         case ' ':
           e.preventDefault();

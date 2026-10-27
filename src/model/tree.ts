@@ -12,6 +12,7 @@ export function createMap(title = DEFAULT_MAP_TITLE, now = Date.now()): MindMapD
   return {
     id: createId(),
     schemaVersion: 1,
+    designPreset: 'clean-structured',
     title,
     rootId,
     nodes: { [rootId]: { id: rootId, text: title, parentId: null, children: [], checked: false } },
@@ -182,7 +183,7 @@ export function setTitle(doc: MindMapDoc, title: string): MindMapDoc {
 /** Older maps stored the title and root text separately; the title wins. */
 export const syncRootWithTitle = (doc: MindMapDoc): MindMapDoc => setTitle(doc, doc.title);
 
-export type NodeAttributes = Pick<MindNode, 'note' | 'link' | 'dueDate' | 'bold' | 'textColor' | 'routine' | 'images'>;
+export type NodeAttributes = Pick<MindNode, 'note' | 'link' | 'dueDate' | 'bold' | 'textColor' | 'backgroundColor' | 'routine' | 'images'>;
 
 /**
  * Sets optional attributes; `undefined`, `false`, empty strings and the default color remove the attribute.

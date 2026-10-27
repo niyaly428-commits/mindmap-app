@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { MindMapDB } from './db';
 import { createMapRepository } from './mapRepository';
-import { addChild } from '../model/tree';
+import { addChild, createMap, setAttributes } from '../model/tree';
 
 let db: MindMapDB;
 const repo = () => createMapRepository(db);
@@ -48,6 +48,47 @@ describe('mapRepository (IndexedDB)', () => {
     const stored = (await r.get(next.id))!;
     expect(stored.nodes[stored.rootId].children.map((id) => stored.nodes[id].text)).toEqual(['外注']);
     expect(await r.list()).toHaveLength(2);
+    expect(next.mapDate).toBe('2026-09-30');
+    expect((await r.list()).map((map) => map.mapDate)).toEqual(['2026-09-30', '2026-09-29']);
+  });
+
+  it('creates at most one daily map for a date and keeps legacy same-day maps intact', async () => {
+    db = new MindMapDB(`test-${Math.random()}`);
+    const r = repo();
+    const legacyDate = '2026-10-01';
+    const firstLegacy = { ...createMap(legacyDate), createdAt: new Date(2026, 8, 1).getTime() };
+    const secondLegacy = { ...createMap(legacyDate), createdAt: new Date(2026, 8, 2).getTime() };
+    await db.maps.bulkAdd([firstLegacy, secondLegacy]);
+
+    const daily = await r.createForDate(legacyDate);
+    const repeated = await r.createForDate(legacyDate);
+    expect(daily.id).toBe(firstLegacy.id);
+    expect(repeated.id).toBe(daily.id);
+    expect(await db.maps.count()).toBe(2);
+    expect((await db.maps.get(secondLegacy.id))?.title).toBe(legacyDate);
+  });
+
+  it('does not duplicate or overwrite an existing target date when creating the next day', async () => {
+    db = new MindMapDB(`test-${Math.random()}`);
+    const r = repo();
+    const source = await r.createForDate('2026-09-29');
+    const sourceSnapshot = structuredClone(source);
+    const existingTarget = await r.createForDate('2026-09-30');
+    const next = await r.createNextDay(source.id);
+    expect(next?.id).toBe(existingTarget.id);
+    expect(await db.maps.count()).toBe(2);
+    expect(await db.maps.get(source.id)).toEqual(sourceSnapshot);
+  });
+
+  it('saves daily report text outside map editing and preserves it during regular autosaves', async () => {
+    db = new MindMapDB(`test-${Math.random()}`);
+    const r = repo(); const map = await r.createForDate('2026-10-02');
+    await r.saveDailyReport(map.id, '編集した日報');
+    expect((await r.get(map.id))?.dailyReport).toBe('編集した日報');
+    await r.save({ ...map, title: 'Renamed in editor' });
+    const loaded = await r.get(map.id);
+    expect(loaded?.dailyReport).toBe('編集した日報');
+    expect(loaded?.mapDate).toBe('2026-10-02');
   });
 
   it('persists image blobs and clones them into the next map', async () => {
@@ -65,5 +106,14 @@ describe('mapRepository (IndexedDB)', () => {
     await r.remove(map.id);
     expect(await r.getImage(assetId)).toBeUndefined();
     expect(await r.getImage(copiedAssetId)).toBeDefined();
+  });
+
+  it('persists optional node background colors without a database schema migration', async () => {
+    db = new MindMapDB(`test-${Math.random()}`);
+    const r = repo(); const map = await r.create('Highlights');
+    const topic = addChild(map, map.rootId, 'Important');
+    const highlighted = setAttributes(topic.doc, topic.id, { backgroundColor: 'purple' });
+    await r.save(highlighted);
+    expect((await r.get(map.id))!.nodes[topic.id].backgroundColor).toBe('purple');
   });
 });

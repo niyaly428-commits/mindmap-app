@@ -40,4 +40,21 @@ describe('editor shortcuts', () => {
     expect(usePopoverStore.getState().popover).toBeNull();
     expect(event.preventDefault).not.toHaveBeenCalled();
   });
+
+  it('deletes all selected nodes with one Delete keypress', () => {
+    const store = useEditorStore.getState();
+    const first = store.selectedId!;
+    store.addSibling(first);
+    const second = useEditorStore.getState().selectedId!;
+    useEditorStore.getState().setSelection([first, second]);
+    const event = key({ key: 'Delete' });
+    handleKeyboardShortcut(event);
+    expect(useEditorStore.getState().doc!.nodes[first]).toBeUndefined();
+    expect(useEditorStore.getState().doc!.nodes[second]).toBeUndefined();
+    expect(useEditorStore.getState().past).toHaveLength(2);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().doc!.nodes[first]).toBeDefined();
+    expect(useEditorStore.getState().doc!.nodes[second]).toBeDefined();
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
 });

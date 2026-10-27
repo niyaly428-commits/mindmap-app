@@ -69,7 +69,10 @@ function copySubtree(src: Record<NodeId, MindNode>, id: NodeId, parentId: NodeId
   const children = includedChildren.map((c) => copySubtree(src, c, newId, out, keepWholeBranch || !!src[c].routine));
   const copied = { ...src[id] };
   delete copied.position;
-  out[newId] = { ...copied, id: newId, parentId, children };
+  // Routine tasks start each day open. A completed ancestor must also reopen
+  // when one of its copied descendants is now incomplete.
+  const checked = copied.routine ? false : copied.checked && children.every((child) => out[child].checked);
+  out[newId] = { ...copied, id: newId, parentId, children, checked };
   return newId;
 }
 
@@ -85,5 +88,10 @@ export function createNextDayMap(source: MindMapDoc, now = Date.now()): MindMapD
     .filter((id) => source.nodes[id].routine || !source.nodes[id].checked || hasRoutine(source.nodes, id))
     .map((id) => copySubtree(source.nodes, id, doc.rootId, nodes, !source.nodes[id].checked || !!source.nodes[id].routine));
   nodes[doc.rootId] = { ...nodes[doc.rootId], children: carried };
-  return { ...doc, nodes };
+  return {
+    ...doc,
+    designPreset: source.designPreset ?? 'soft-organic',
+    colorTheme: source.colorTheme,
+    nodes,
+  };
 }
