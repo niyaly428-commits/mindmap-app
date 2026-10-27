@@ -65,6 +65,8 @@ export interface MindMapDoc {
   mapDate?: string;
   /** User editable daily report draft; saved outside editor undo history. */
   dailyReport?: string;
+  /** Node IDs whose memos are omitted from the generated daily report. */
+  dailyReportExcludedMemoIds?: NodeId[];
   /** Kept separate from map dates; pins only affect timeline placement. */
   pinned?: boolean;
 }

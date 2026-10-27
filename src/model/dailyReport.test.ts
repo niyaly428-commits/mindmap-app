@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addChild, createMap, setAttributes, setStatus } from './tree';
-import { generateDailyReport, normalizeDailyReportText, resolveDailyReportDraft } from './dailyReport';
+import { generateDailyReport, listDailyReportMemos, normalizeDailyReportText, resolveDailyReportDraft } from './dailyReport';
 import type { MindMapDoc } from './types';
 
 describe('daily report generation', () => {
@@ -8,7 +8,7 @@ describe('daily report generation', () => {
     expect(normalizeDailyReportText('**■ 打合せ**\n・task\nhttps://example.com')).toBe('■打合せ\n・task\nhttps://example.com');
   });
 
-  it('includes only completed, in-progress and waiting work, grouped by category with known details', () => {
+  it('includes done, in-progress and waiting tasks but excludes todo and unset tasks', () => {
     let doc: MindMapDoc = { ...createMap('Daily work'), mapDate: '2026-09-30' };
     const ads = addChild(doc, doc.rootId, '広告運用'); doc = ads.doc;
     const campaign = addChild(doc, ads.id, 'キャンペーン改善'); doc = campaign.doc;
@@ -36,6 +36,48 @@ describe('daily report generation', () => {
     expect(report).not.toContain('未着手');
     expect(report).not.toContain('未着手カテゴリ');
     expect(report.endsWith('以上です。\n本日もありがとうございました。\n明日もどうぞよろしくお願いいたします。\n\n田坂')).toBe(true);
+  });
+
+  it('includes every memo by default and excludes only the selected node when memo text is duplicated', () => {
+    let doc: MindMapDoc = createMap('Memo filters');
+    const category = addChild(doc, doc.rootId, '広告運用'); doc = category.doc;
+    const first = addChild(doc, category.id, 'YTS'); doc = setStatus(first.doc, first.id, 'doing');
+    doc = setAttributes(doc, first.id, { note: '同じ共有メモ' });
+    const second = addChild(doc, category.id, 'TK'); doc = setStatus(second.doc, second.id, 'waiting');
+    doc = setAttributes(doc, second.id, { note: '同じ共有メモ' });
+    const originalFirstNote = doc.nodes[first.id].note;
+
+    expect(listDailyReportMemos(doc)).toEqual([
+      { nodeId: first.id, path: 'Memo filters › 広告運用 › YTS', text: '同じ共有メモ' },
+      { nodeId: second.id, path: 'Memo filters › 広告運用 › TK', text: '同じ共有メモ' },
+    ]);
+    expect(generateDailyReport(doc).match(/同じ共有メモ/g)).toHaveLength(2);
+
+    const excludedDoc = { ...doc, dailyReportExcludedMemoIds: [first.id] };
+    const filtered = generateDailyReport(excludedDoc);
+    expect(filtered).not.toContain('・YTS\n  同じ共有メモ');
+    expect(filtered).toContain('・YTS');
+    expect(filtered).toContain('・TK\n  同じ共有メモ');
+    expect(filtered.match(/同じ共有メモ/g)).toHaveLength(1);
+    expect(resolveDailyReportDraft(excludedDoc, generateDailyReport(doc))).toBe(filtered);
+    expect(generateDailyReport({ ...excludedDoc, dailyReportExcludedMemoIds: undefined }).match(/同じ共有メモ/g)).toHaveLength(2);
+    expect(doc.nodes[first.id].note).toBe(originalFirstNote);
+  });
+
+  it('shows normal task hierarchy when a detailed memo is excluded', () => {
+    let doc: MindMapDoc = createMap('Detailed memo exclusion');
+    const category = addChild(doc, doc.rootId, 'AD調整');
+    doc = setAttributes(category.doc, category.id, { note: '▽YTSモル\n予算を調整' });
+    const task = addChild(doc, category.id, 'YTS'); doc = task.doc;
+    const child = addChild(doc, task.id, 'モル'); doc = setStatus(child.doc, child.id, 'doing');
+
+    const included = generateDailyReport(doc);
+    expect(included).toContain('▽YTSモル');
+    expect(included).not.toContain('・YTS');
+    const excludedDoc = { ...doc, dailyReportExcludedMemoIds: [category.id] };
+    const excluded = generateDailyReport(excludedDoc);
+    expect(excluded).not.toContain('▽YTSモル');
+    expect(excluded).toContain('〇YTS\n  ・モル');
   });
 
   it('omits categories without reportable tasks', () => {

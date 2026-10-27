@@ -81,14 +81,15 @@ export function createMapRepository(db: MindMapDB = defaultDb) {
         updatedAt: Math.max(doc.updatedAt, current?.updatedAt ?? 0),
         mapDate: doc.mapDate ?? current?.mapDate,
         dailyReport: doc.dailyReport ?? current?.dailyReport,
+        dailyReportExcludedMemoIds: doc.dailyReportExcludedMemoIds ?? current?.dailyReportExcludedMemoIds,
         pinned: doc.pinned ?? current?.pinned,
       });
       notifyLocalChange();
     },
-    async saveDailyReport(mapId: string, dailyReport: string): Promise<void> {
+    async saveDailyReport(mapId: string, dailyReport: string, excludedMemoIds?: string[]): Promise<void> {
       await db.transaction('rw', db.maps, async () => {
         const current = await db.maps.get(mapId);
-        if (current) await db.maps.put({ ...current, dailyReport, updatedAt: Date.now() });
+        if (current) await db.maps.put({ ...current, dailyReport, ...(excludedMemoIds ? { dailyReportExcludedMemoIds: [...excludedMemoIds] } : {}), updatedAt: Date.now() });
       });
       notifyLocalChange();
     },

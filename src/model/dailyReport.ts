@@ -3,6 +3,7 @@ import { mapDateOf } from './timeline';
 import type { MindMapDoc, MindNode, NodeId } from './types';
 
 type ReportStatus = 'done' | 'doing' | 'waiting';
+export interface DailyReportOptions { excludedMemoIds?: readonly NodeId[] }
 
 /** Removes the old generated Markdown heading markers from saved drafts. */
 export function normalizeDailyReportText(text: string): string {
@@ -15,15 +16,15 @@ function reportStatus(node: MindNode): ReportStatus | undefined {
 }
 
 /** A heading-led memo is a complete report section for the node's subtree. */
-function hasDetailedReportMemo(node: MindNode): boolean {
-  return !!node.note?.split(/\r?\n/).some((line) => /^\s*[■▽]\s*\S/.test(line));
+function hasDetailedReportMemo(node: MindNode, excludedMemoIds: ReadonlySet<NodeId>): boolean {
+  return !excludedMemoIds.has(node.id) && !!node.note?.split(/\r?\n/).some((line) => /^\s*[■▽]\s*\S/.test(line));
 }
 
-function taskOwnLines(node: MindNode, depth: number): string[] {
+function taskOwnLines(node: MindNode, depth: number, excludedMemoIds: ReadonlySet<NodeId>): string[] {
   const eligible = !!reportStatus(node);
   const indent = '  '.repeat(depth);
   const lines = [`${indent}${eligible ? '・' : '〇'}${node.text}`];
-  if (node.note) lines.push(...node.note.split(/\r?\n/).map((line) => `${indent}  ${line}`));
+  if (node.note && !excludedMemoIds.has(node.id)) lines.push(...node.note.split(/\r?\n/).map((line) => `${indent}  ${line}`));
   if (eligible && node.link) lines.push(`${indent}  関連リンク: ${node.link}`);
   if (eligible && node.dueDate) lines.push(`${indent}  期限: ${node.dueDate}`);
   return lines;
@@ -36,6 +37,7 @@ function renderTaskTree(
   depth: number,
   visited: Set<NodeId>,
   suppressDetailedSubtree: boolean,
+  excludedMemoIds: ReadonlySet<NodeId>,
 ): string[] {
   if (visited.has(id)) return [];
   visited.add(id);
@@ -43,13 +45,13 @@ function renderTaskTree(
   if (!node) return [];
 
   const eligible = !!reportStatus(node);
-  const detailedMemo = hasDetailedReportMemo(node);
+  const detailedMemo = hasDetailedReportMemo(node, excludedMemoIds);
   const descendants = suppressDetailedSubtree && detailedMemo
     ? []
-    : node.children.flatMap((child) => renderTaskTree(nodes, child, depth + 1, visited, suppressDetailedSubtree));
+    : node.children.flatMap((child) => renderTaskTree(nodes, child, depth + 1, visited, suppressDetailedSubtree, excludedMemoIds));
   if (!eligible && !descendants.length && !(suppressDetailedSubtree && detailedMemo)) return [];
 
-  const lines = taskOwnLines(node, depth);
+  const lines = taskOwnLines(node, depth, excludedMemoIds);
   lines.push(...descendants);
   return lines;
 }
@@ -122,7 +124,7 @@ function removeStaleDescendantLines(
 }
 
 /** Removes duplicate descendant rows only for nodes with a detailed report memo. */
-function removeDetailedMemoDuplicates(doc: MindMapDoc, draft: string): string {
+function removeDetailedMemoDuplicates(doc: MindMapDoc, draft: string, excludedMemoIds: ReadonlySet<NodeId>): string {
   const lines = draft.split('\n');
   const root = doc.nodes[doc.rootId];
   if (!root) return draft;
@@ -136,9 +138,9 @@ function removeDetailedMemoDuplicates(doc: MindMapDoc, draft: string): string {
     let end = lines.findIndex((line, index) => index > start && (line.startsWith('■') || line === '以上です。'));
     if (end < 0) end = lines.length;
 
-    if (hasDetailedReportMemo(category)) {
+    if (hasDetailedReportMemo(category, excludedMemoIds)) {
       const anchor = [heading, ...(category.note ?? '').split(/\r?\n/).map((line) => `  ${line}`)];
-      const duplicateBlock = category.children.flatMap((id) => renderTaskTree(doc.nodes, id, 0, new Set(), false));
+      const duplicateBlock = category.children.flatMap((id) => renderTaskTree(doc.nodes, id, 0, new Set(), false, excludedMemoIds));
       end -= removeExactBlockAfter(lines, anchor, duplicateBlock, start, end);
       end -= removeStaleDescendantLines(lines, doc.nodes, anchor, category.children, 0, start, end);
       continue;
@@ -147,9 +149,9 @@ function removeDetailedMemoDuplicates(doc: MindMapDoc, draft: string): string {
     const visit = (id: NodeId, depth: number): void => {
       const node = doc.nodes[id];
       if (!node) return;
-      if (hasDetailedReportMemo(node)) {
-        const anchor = taskOwnLines(node, depth);
-        const duplicateBlock = node.children.flatMap((child) => renderTaskTree(doc.nodes, child, depth + 1, new Set(), false));
+      if (hasDetailedReportMemo(node, excludedMemoIds)) {
+        const anchor = taskOwnLines(node, depth, excludedMemoIds);
+        const duplicateBlock = node.children.flatMap((child) => renderTaskTree(doc.nodes, child, depth + 1, new Set(), false, excludedMemoIds));
         end -= removeExactBlockAfter(lines, anchor, duplicateBlock, start + 1, end);
         end -= removeStaleDescendantLines(lines, doc.nodes, anchor, node.children, depth + 1, start + 1, end, depth);
         return;
@@ -161,7 +163,7 @@ function removeDetailedMemoDuplicates(doc: MindMapDoc, draft: string): string {
   return lines.join('\n');
 }
 
-function generateDailyReportVersion(doc: MindMapDoc, suppressDetailedSubtree: boolean): string {
+function generateDailyReportVersion(doc: MindMapDoc, suppressDetailedSubtree: boolean, excludedMemoIds: ReadonlySet<NodeId>): string {
   const [, month, day] = mapDateOf(doc).split('-').map(Number);
   const lines = ['お疲れ様です、田坂です。', '本日の業務報告です。', '', `${month}月${day}日 業務日報`];
   const root = doc.nodes[doc.rootId];
@@ -169,14 +171,14 @@ function generateDailyReportVersion(doc: MindMapDoc, suppressDetailedSubtree: bo
     for (const categoryId of root.children) {
       const category = doc.nodes[categoryId];
       if (!category) continue;
-      const detailedMemo = hasDetailedReportMemo(category);
+      const detailedMemo = hasDetailedReportMemo(category, excludedMemoIds);
       const visited = new Set<NodeId>();
       const tasks = suppressDetailedSubtree && detailedMemo
         ? []
-        : category.children.flatMap((id) => renderTaskTree(doc.nodes, id, 0, visited, suppressDetailedSubtree));
+        : category.children.flatMap((id) => renderTaskTree(doc.nodes, id, 0, visited, suppressDetailedSubtree, excludedMemoIds));
       if (!tasks.length && !(suppressDetailedSubtree && detailedMemo)) continue;
       lines.push('', `■${category.text}`);
-      if (category.note) lines.push(...category.note.split(/\r?\n/).map((line) => `  ${line}`));
+      if (category.note && !excludedMemoIds.has(category.id)) lines.push(...category.note.split(/\r?\n/).map((line) => `  ${line}`));
       lines.push(...tasks);
     }
   }
@@ -184,15 +186,39 @@ function generateDailyReportVersion(doc: MindMapDoc, suppressDetailedSubtree: bo
   return lines.join('\n');
 }
 
-export function generateDailyReport(doc: MindMapDoc): string {
-  return generateDailyReportVersion(doc, true);
+function excludedSet(doc: MindMapDoc, options?: DailyReportOptions): ReadonlySet<NodeId> {
+  return new Set(options?.excludedMemoIds ?? doc.dailyReportExcludedMemoIds ?? []);
+}
+
+export interface DailyReportMemo { nodeId: NodeId; path: string; text: string }
+
+/** Lists note-bearing nodes with tree paths so same-text memos remain distinguishable. */
+export function listDailyReportMemos(doc: MindMapDoc): DailyReportMemo[] {
+  const result: DailyReportMemo[] = [];
+  const visit = (id: NodeId, path: string[]) => {
+    const node = doc.nodes[id];
+    if (!node) return;
+    const nextPath = [...path, node.text];
+    if (id !== doc.rootId && node.note?.trim()) result.push({ nodeId: id, path: nextPath.join(' › '), text: node.note });
+    node.children.forEach((child) => visit(child, nextPath));
+  };
+  visit(doc.rootId, []);
+  return result;
+}
+
+export function generateDailyReport(doc: MindMapDoc, options?: DailyReportOptions): string {
+  return generateDailyReportVersion(doc, true, excludedSet(doc, options));
 }
 
 /** Keeps user-edited drafts and removes only stale duplicate rows beneath detailed memos. */
-export function resolveDailyReportDraft(doc: MindMapDoc, savedDraft?: string): string {
-  const generated = generateDailyReport(doc);
+export function resolveDailyReportDraft(doc: MindMapDoc, savedDraft?: string, options?: DailyReportOptions): string {
+  const excludedMemoIds = excludedSet(doc, options);
+  const generated = generateDailyReport(doc, options);
   if (savedDraft === undefined) return generated;
   const normalizedDraft = normalizeDailyReportText(savedDraft);
-  if (normalizedDraft === generateDailyReportVersion(doc, false)) return generated;
-  return removeDetailedMemoDuplicates(doc, normalizedDraft);
+  // A previously generated draft may predate memo exclusions or detailed memo
+  // suppression. Rebuild those exact generated versions with the current options.
+  if (normalizedDraft === generateDailyReportVersion(doc, false, new Set()) ||
+      normalizedDraft === generateDailyReportVersion(doc, true, new Set())) return generated;
+  return removeDetailedMemoDuplicates(doc, normalizedDraft, excludedMemoIds);
 }

@@ -352,6 +352,15 @@ button {
 .daily-report-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--muted); font-size:12px; }
 .daily-report-footer > div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
 .daily-report-error { margin:0; color:var(--danger); font-size:12px; }
+.daily-report-memo-settings { flex:none; max-height:190px; overflow:auto; border:1px solid var(--border); border-radius:8px; padding:8px 12px; background:var(--panel); }
+.daily-report-memo-settings > summary { position:sticky; top:-8px; padding:4px 0 8px; background:var(--panel); color:var(--text); font-weight:650; cursor:pointer; }
+.daily-report-memo-settings > p { margin:0 0 8px; color:var(--muted); font-size:12px; }
+.daily-report-memo-list { display:flex; flex-direction:column; gap:7px; }
+.daily-report-memo-option { display:flex; align-items:flex-start; gap:9px; padding:8px; border-radius:6px; background:var(--bg); cursor:pointer; }
+.daily-report-memo-option > input { flex:none; margin:3px 0 0; }
+.daily-report-memo-option > span { min-width:0; }
+.daily-report-memo-option strong { display:block; margin-bottom:3px; font-size:12px; overflow-wrap:anywhere; }
+.daily-report-memo-option pre { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--muted); font:inherit; font-size:12px; line-height:1.45; }
 @media (max-width: 780px) {
   .primary-actions { order: 3; width: 100%; overflow-x: auto; }
   .toolbar-action { flex: none; }

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { newMap, topic, typeTopic } from './helpers';
+import { chooseStatus, newMap, openMenu, topic, typeTopic } from './helpers';
 
 test('timeline stacks multiple maps for the same date', async ({ page }) => {
   await newMap(page);
@@ -84,6 +84,66 @@ test('bulk text styling persists and background color is included in PDF output'
   await expect(printed.locator('strong')).toHaveCSS('font-weight', '750');
   await expect(printed.locator('strong')).toHaveCSS('color', 'rgb(224, 49, 49)');
 });
+
+test('daily report memo exclusions distinguish identical notes and persist across regeneration', async ({ page }) => {
+  await newMap(page);
+  const mapId = new URL(page.url()).hash.split('/').at(-1)!;
+  await page.keyboard.press('Tab'); await typeTopic(page, '広告運用');
+  await page.keyboard.press('Tab'); await typeTopic(page, 'Task A');
+  await chooseStatus(page, 'Task A', '進行中');
+  await openMenu(topic(page, 'Task A'));
+  await page.getByRole('menuitem', { name: 'メモ' }).click();
+  await page.locator('.note-editor').fill('同じ共有メモ');
+  await page.keyboard.press('Escape');
+  await topic(page, 'Task A').click();
+  await page.keyboard.press('Enter'); await typeTopic(page, 'Task B');
+  await chooseStatus(page, 'Task B', '待ち');
+  await openMenu(topic(page, 'Task B'));
+  await page.getByRole('menuitem', { name: 'メモ' }).click();
+  await page.locator('.note-editor').fill('同じ共有メモ');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(450);
+  await page.getByRole('button', { name: '← 一覧' }).click();
+  await page.locator('.card').getByRole('button', { name: '日報' }).click();
+
+  const report = page.locator('#daily-report-text');
+  const taskAMemo = page.getByRole('checkbox', { name: /Task A のメモを日報に反映/ });
+  const taskBMemo = page.getByRole('checkbox', { name: /Task B のメモを日報に反映/ });
+  await expect(taskAMemo).toBeChecked();
+  await expect(taskBMemo).toBeChecked();
+  await expect.poll(() => report.inputValue()).toContain('同じ共有メモ');
+  expect((await report.inputValue()).match(/同じ共有メモ/g)).toHaveLength(2);
+
+  await taskAMemo.uncheck();
+  await expect(taskBMemo).toBeChecked();
+  await expect.poll(() => report.inputValue()).toContain('・Task A\n・Task B\n  同じ共有メモ');
+  expect((await report.inputValue()).match(/同じ共有メモ/g)).toHaveLength(1);
+  await page.getByRole('button', { name: '閉じる' }).click();
+  await page.locator('.card').getByRole('button', { name: '日報' }).click();
+  await expect(page.getByRole('checkbox', { name: /Task A のメモを日報に反映/ })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: /Task B のメモを日報に反映/ })).toBeChecked();
+  await page.getByRole('button', { name: '再生成' }).click();
+  await expect.poll(() => report.inputValue()).toContain('・Task A\n・Task B\n  同じ共有メモ');
+
+  const stored = await page.evaluate(async (id) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('mindmap-app');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await new Promise<Record<string, any>>((resolve, reject) => {
+        const request = db.transaction('maps').objectStore('maps').get(id);
+        request.onsuccess = () => request.result ? resolve(request.result) : reject(new Error('map missing'));
+        request.onerror = () => reject(request.error);
+      });
+    } finally { db.close(); }
+  }, mapId);
+  expect(stored.nodes[Object.keys(stored.nodes).find((id) => stored.nodes[id].text === 'Task A')!].note).toBe('同じ共有メモ');
+  expect(stored.nodes[Object.keys(stored.nodes).find((id) => stored.nodes[id].text === 'Task B')!].note).toBe('同じ共有メモ');
+  expect(stored.dailyReportExcludedMemoIds).toHaveLength(1);
+});
+
 test('recent days, collapsed month groups, and pins retain maps in date order', async ({ page }) => {
   await newMap(page);
   const sourceId = new URL(page.url()).hash.split('/').at(-1)!;
