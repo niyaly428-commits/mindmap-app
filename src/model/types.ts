@@ -65,6 +65,8 @@ export interface MindMapDoc {
   mapDate?: string;
   /** User editable daily report draft; saved outside editor undo history. */
   dailyReport?: string;
+  /** Kept separate from map dates; pins only affect timeline placement. */
+  pinned?: boolean;
 }
 
 export interface MindMapSummary {
@@ -73,4 +75,5 @@ export interface MindMapSummary {
   createdAt: number;
   updatedAt: number;
   mapDate?: string;
+  pinned?: boolean;
 }

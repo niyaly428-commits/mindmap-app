@@ -42,9 +42,43 @@ export function mapDateOf(doc: Pick<MindMapDoc, 'mapDate' | 'title' | 'createdAt
 
 export function sortTimelineMaps<T extends MindMapSummary>(maps: T[]): T[] {
   return [...maps].sort((a, b) =>
-    (b.mapDate ?? dateKeyOf(new Date(b.createdAt))).localeCompare(a.mapDate ?? dateKeyOf(new Date(a.createdAt))) ||
+    mapDateOf(b).localeCompare(mapDateOf(a)) ||
     b.updatedAt - a.updatedAt,
   );
+}
+
+export interface TimelineDateGroup { date: string; maps: MindMapSummary[] }
+export interface TimelineMonthGroup { month: string; maps: MindMapSummary[] }
+export interface TimelineSections {
+  pinned: MindMapSummary[];
+  futureDays: TimelineDateGroup[];
+  recentDays: TimelineDateGroup[];
+  olderMonths: TimelineMonthGroup[];
+}
+
+/** Pins are separated first; remaining maps use calendar days and month buckets. */
+export function groupTimelineMaps(maps: MindMapSummary[], today = todayDateKey()): TimelineSections {
+  const sorted = sortTimelineMaps(maps);
+  const pinned = sorted.filter((map) => map.pinned);
+  const future = new Map<string, MindMapSummary[]>();
+  const recent = new Map<string, MindMapSummary[]>();
+  const older = new Map<string, MindMapSummary[]>();
+  const recentStart = addDaysToDateKey(today, -2);
+
+  for (const map of sorted) {
+    if (map.pinned) continue;
+    const date = mapDateOf(map);
+    const groups = date > today ? future : date >= recentStart ? recent : older;
+    const key = date > today || date >= recentStart ? date : date.slice(0, 7);
+    groups.set(key, [...(groups.get(key) ?? []), map]);
+  }
+
+  return {
+    pinned,
+    futureDays: [...future.entries()].map(([date, dayMaps]) => ({ date, maps: dayMaps })),
+    recentDays: [...recent.entries()].map(([date, dayMaps]) => ({ date, maps: dayMaps })),
+    olderMonths: [...older.entries()].map(([month, monthMaps]) => ({ month, maps: monthMaps })),
+  };
 }
 
 export function dateKeyToLocalDate(key: string): Date {

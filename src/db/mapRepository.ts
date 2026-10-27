@@ -13,7 +13,7 @@ export function createMapRepository(db: MindMapDB = defaultDb) {
   return {
     async list(): Promise<MindMapSummary[]> {
       const maps = await db.maps.orderBy('updatedAt').reverse().toArray();
-      return sortTimelineMaps(maps.map((doc) => ({ id: doc.id, title: doc.title, createdAt: doc.createdAt, updatedAt: doc.updatedAt, mapDate: mapDateOf(doc) })));
+      return sortTimelineMaps(maps.map((doc) => ({ id: doc.id, title: doc.title, createdAt: doc.createdAt, updatedAt: doc.updatedAt, mapDate: mapDateOf(doc), pinned: doc.pinned })));
     },
     async get(id: string): Promise<MindMapDoc | undefined> {
       const doc = await db.maps.get(id);
@@ -81,6 +81,7 @@ export function createMapRepository(db: MindMapDB = defaultDb) {
         updatedAt: Math.max(doc.updatedAt, current?.updatedAt ?? 0),
         mapDate: doc.mapDate ?? current?.mapDate,
         dailyReport: doc.dailyReport ?? current?.dailyReport,
+        pinned: doc.pinned ?? current?.pinned,
       });
       notifyLocalChange();
     },
@@ -88,6 +89,13 @@ export function createMapRepository(db: MindMapDB = defaultDb) {
       await db.transaction('rw', db.maps, async () => {
         const current = await db.maps.get(mapId);
         if (current) await db.maps.put({ ...current, dailyReport, updatedAt: Date.now() });
+      });
+      notifyLocalChange();
+    },
+    async setPinned(mapId: string, pinned: boolean): Promise<void> {
+      await db.transaction('rw', db.maps, async () => {
+        const current = await db.maps.get(mapId);
+        if (current) await db.maps.put({ ...current, pinned: pinned || undefined, updatedAt: Date.now() });
       });
       notifyLocalChange();
     },
